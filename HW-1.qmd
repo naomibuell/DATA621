@@ -9,7 +9,7 @@ date: 3/1/2026
 
 ## Overview
 
-In this homework assignment, you will explore, analyze and model a data set containing approximately 2200 records. Each record represents a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season. Your objective is to build a multiple linear regression model on the training data to predict the number of wins for the team. You can only use the variables given to you (or variables that you derive from the variables provided). Below is a short description of the variables of interest in the data set:
+In this homework assignment, you will explore, analyze and model a data set containing approximately 2200 records. Each record represents a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season. Your objective is to build a multiple linear regression model on the training data to predict the number of wins for the team. You can only use the variables given to you (or variables that you derive from the variables provided).
 
 ## Deliverables:
 
@@ -21,7 +21,15 @@ In this homework assignment, you will explore, analyze and model a data set cont
 
 ### 1. DATA EXPLORATION (25 Points)
 
-Describe the size and the variables in the moneyball training data set. Consider that too much detail will cause a manager to lose interest while too little detail will make the manager consider that you aren’t doing your job. Some suggestions are given below. Please do NOT treat this as a check list of things to do to complete the assignment. You should have your own thoughts on what to tell the boss. These are just ideas. a. Mean / Standard Deviation / Median b. Bar Chart or Box Plot of the data c. Is the data correlated to the target variable (or to other variables?) d. Are any of the variables missing and need to be imputed “fixed”?
+Describe the size and the variables in the moneyball training data set. Consider that too much detail will cause a manager to lose interest while too little detail will make the manager consider that you aren’t doing your job. Some suggestions are given below. Please do NOT treat this as a check list of things to do to complete the assignment. You should have your own thoughts on what to tell the boss. These are just ideas.
+
+a\. Mean / Standard Deviation / Median
+
+b\. Bar Chart or Box Plot of the data
+
+c\. Is the data correlated to the target variable (or to other variables?)
+
+d\. Are any of the variables missing and need to be imputed “fixed”?
 
 ### 2. DATA PREPARATION (25 Points)
 
@@ -42,11 +50,15 @@ Decide on the criteria for selecting the best multiple linear regression model. 
 
 # Analysis (Appendix)
 
+## Intro
+
 Load packages.
 
 ```{r}
 # Load necessary libraries
 library(tidyverse)
+library(skimr)
+library(corrplot)
 ```
 
 Import data.
@@ -55,4 +67,87 @@ Import data.
 # Load the training and evaluation datasets
 moneyball_train <- read_csv("moneyball-training-data (1).csv")
 moneyball_eval <- read_csv("moneyball-evaluation-data (2).csv")
+```
+
+## 1. Data Exploration
+
+First, we preview the data.
+
+```{r}
+moneyball_train |> head()
+```
+
+We can also check summary statistics for all variables in our training data, including checking missingness.
+
+```{r}
+moneyball_train |> skim()
+
+nrows <- moneyball_train |> nrow()
+ncols <- moneyball_train |> length()
+perc_complete <- round(moneyball_train |> n_complete()/nrows/ncols * 100, 2)
+```
+
+This training dataset contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The variables with the highest rates of missingness are:
+
+```{r}
+moneyball_train |>
+  summarise(across(everything(), ~ sum(is.na(.))/nrows * 100)) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "missing_percentage") |>
+  arrange(desc(missing_percentage)) |>
+  filter(missing_percentage > 0) |>
+  head()
+```
+
+This missingness will need to be addressed in the data preparation step.
+
+We also visualize correlations between all variables.
+
+```{r}
+moneyball_train_cor <- moneyball_train |>
+  cor(use = "pairwise.complete.obs")
+
+corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.7, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.9)
+```
+
+The most correlated variables with the target variable `TARGET_WINS` are:
+
+```{r}
+moneyball_train_cor |>
+  as.data.frame() |>
+  rownames_to_column(var = "variable") |>
+  select(variable, TARGET_WINS) |>
+  filter(variable != "TARGET_WINS") |>
+  arrange(desc(abs(TARGET_WINS))) |>
+  head()
+```
+
+These may be strong predictors of wins.
+
+The most autocorrelated variables are:
+
+```{r}
+moneyball_train_cor |>
+  as.data.frame() |>
+  rownames_to_column(var = "variable1") |>
+  pivot_longer(-variable1, names_to = "variable2", values_to = "correlation") |>
+  filter(variable1 != variable2) |>
+  arrange(desc(abs(correlation))) |>
+  head(20)
+```
+
+It makes sense that homeruns by batters (`TEAM_BATTING_HR`) and homeruns allowed (`TEAM_PITCHING_HR`) are correlated, as teams that hit many homeruns may also allow many homeruns, for example. We may need to avoid including these pairs of variables in the same model to prevent multicollinearity.
+
+## 2. Data Preparation
+
+```{r}
+```
+
+## 3. Build Models
+
+```{r}
+```
+
+## 4. Select Models
+
+```{r}
 ```
