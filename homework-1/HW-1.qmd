@@ -76,6 +76,8 @@ First, we preview the data.
 moneyball_train |> head()
 ```
 
+The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of wins for the team in that season. The other variables represent various performance statistics for the team.
+
 We can also check summary statistics for all variables in our training data, including checking missingness.
 
 ```{r}
@@ -86,15 +88,14 @@ ncols <- moneyball_train |> length()
 perc_complete <- round(moneyball_train |> n_complete() / nrows / ncols * 100, 2)
 ```
 
-This training dataset contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The variables with the highest rates of missingness are:
+This training dataset contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The variables with missingness are:
 
 ```{r}
 moneyball_train |>
     summarise(across(everything(), ~ sum(is.na(.)) / nrows * 100)) |>
     pivot_longer(everything(), names_to = "variable", values_to = "missing_percentage") |>
     arrange(desc(missing_percentage)) |>
-    filter(missing_percentage > 0) |>
-    head()
+    filter(missing_percentage > 0)
 ```
 
 This missingness will need to be addressed in the data preparation step.
@@ -105,7 +106,7 @@ We also visualize correlations between all variables.
 moneyball_train_cor <- moneyball_train |>
     cor(use = "pairwise.complete.obs")
 
-corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.7, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.9)
+corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.7, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.7)
 ```
 
 The most correlated variables with the target variable `TARGET_WINS` are:
@@ -117,7 +118,7 @@ moneyball_train_cor |>
     select(variable, TARGET_WINS) |>
     filter(variable != "TARGET_WINS") |>
     arrange(desc(abs(TARGET_WINS))) |>
-    head()
+    head(10)
 ```
 
 These may be strong predictors of wins.
@@ -153,12 +154,15 @@ for (var in names(moneyball_train)) {
 
 Next, we will prepare the data for modeling. 
 
-First, we handle missing data. 
+First, we handle missing data. Since we saw in the EDA that `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` were 91.6%, 33.9%, and 12.6% missing, respectively, and not very correlated with the target variable, so we will drop these variables. The remaining variables are less than 10% missing, so we will impute the missing values with the median of each variable. `TEAM_BASERUN_SB` is the most correlated variable with the target variable that has missingness, so we will be sure to impute this variable rather than drop it. 
 
-```{r}
+The median imputation was picked based on the distributions of the variables with missingness: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. `TEAM_BATTING_SO` is bimodal, so the median is also a better imputation method than the mean for this variable. See the histograms above for the distributions of these variables.
+
+```{r remove_missing_impute}
+moneyball_train_prepared <- moneyball_train |>
+    select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP) |>
+    mutate(across(everything(), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
 ```
-
-Next, we 
 
 ## 3. Build Models
 

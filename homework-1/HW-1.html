@@ -235,6 +235,7 @@ dbl (16): INDEX, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATT...
 #   TEAM_FIELDING_DP &lt;dbl&gt;</code></pre>
 </div>
 </div>
+<p>The data are all numeric, and the target variable is <code>TARGET_WINS</code>, which represents the number of wins for the team in that season. The other variables represent various performance statistics for the team.</p>
 <p>We can also check summary statistics for all variables in our training data, including checking missingness.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>moneyball_train <span class="sc">|&gt;</span> <span class="fu">skim</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -535,14 +536,13 @@ dbl (16): INDEX, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATT...
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>ncols <span class="ot">&lt;-</span> moneyball_train <span class="sc">|&gt;</span> <span class="fu">length</span>()</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>perc_complete <span class="ot">&lt;-</span> <span class="fu">round</span>(moneyball_train <span class="sc">|&gt;</span> <span class="fu">n_complete</span>() <span class="sc">/</span> nrows <span class="sc">/</span> ncols <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<p>This training dataset contains 2276 rows and 17 features, and is 91.01 percent complete. The variables with the highest rates of missingness are:</p>
+<p>This training dataset contains 2276 rows and 17 features, and is 91.01 percent complete. The variables with missingness are:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>moneyball_train <span class="sc">|&gt;</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">everything</span>(), <span class="sc">~</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(.)) <span class="sc">/</span> nrows <span class="sc">*</span> <span class="dv">100</span>)) <span class="sc">|&gt;</span></span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"variable"</span>, <span class="at">values_to =</span> <span class="st">"missing_percentage"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">arrange</span>(<span class="fu">desc</span>(missing_percentage)) <span class="sc">|&gt;</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(missing_percentage <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">head</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(missing_percentage <span class="sc">&gt;</span> <span class="dv">0</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 6 × 2
   variable         missing_percentage
@@ -561,7 +561,7 @@ dbl (16): INDEX, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATT...
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>moneyball_train_cor <span class="ot">&lt;-</span> moneyball_train <span class="sc">|&gt;</span></span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">cor</span>(<span class="at">use =</span> <span class="st">"pairwise.complete.obs"</span>)</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">corrplot</span>(moneyball_train_cor, <span class="at">method =</span> <span class="st">"circle"</span>, <span class="at">type =</span> <span class="st">"upper"</span>, <span class="at">tl.cex =</span> <span class="fl">0.7</span>, <span class="at">sig.level =</span> <span class="fl">0.05</span>, <span class="at">insig =</span> <span class="st">"blank"</span>, <span class="at">addCoef.col =</span> <span class="st">"black"</span>, <span class="at">number.cex =</span> <span class="fl">0.9</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">corrplot</span>(moneyball_train_cor, <span class="at">method =</span> <span class="st">"circle"</span>, <span class="at">type =</span> <span class="st">"upper"</span>, <span class="at">tl.cex =</span> <span class="fl">0.7</span>, <span class="at">sig.level =</span> <span class="fl">0.05</span>, <span class="at">insig =</span> <span class="st">"blank"</span>, <span class="at">addCoef.col =</span> <span class="st">"black"</span>, <span class="at">number.cex =</span> <span class="fl">0.7</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -578,15 +578,19 @@ dbl (16): INDEX, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATT...
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(variable, TARGET_WINS) <span class="sc">|&gt;</span></span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(variable <span class="sc">!=</span> <span class="st">"TARGET_WINS"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">arrange</span>(<span class="fu">desc</span>(<span class="fu">abs</span>(TARGET_WINS))) <span class="sc">|&gt;</span></span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">head</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">head</span>(<span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>          variable TARGET_WINS
-1   TEAM_BATTING_H   0.3887675
-2  TEAM_BATTING_2B   0.2891036
-3  TEAM_BATTING_BB   0.2325599
-4 TEAM_PITCHING_HR   0.1890137
-5  TEAM_FIELDING_E  -0.1764848
-6  TEAM_BATTING_HR   0.1761532</code></pre>
+<pre><code>           variable TARGET_WINS
+1    TEAM_BATTING_H   0.3887675
+2   TEAM_BATTING_2B   0.2891036
+3   TEAM_BATTING_BB   0.2325599
+4  TEAM_PITCHING_HR   0.1890137
+5   TEAM_FIELDING_E  -0.1764848
+6   TEAM_BATTING_HR   0.1761532
+7   TEAM_BATTING_3B   0.1426084
+8   TEAM_BASERUN_SB   0.1351389
+9  TEAM_PITCHING_BB   0.1241745
+10  TEAM_PITCHING_H  -0.1099371</code></pre>
 </div>
 </div>
 <p>These may be strong predictors of wins.</p>
@@ -841,8 +845,13 @@ dbl (16): INDEX, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATT...
 <section id="data-preparation" class="level2">
 <h2 class="anchored" data-anchor-id="data-preparation">2. Data Preparation</h2>
 <p>Next, we will prepare the data for modeling.</p>
-<p>First, we handle missing data.</p>
-<p>Next, we</p>
+<p>First, we handle missing data. Since we saw in the EDA that <code>TEAM_BATTING_HBP</code>, <code>TEAM_BASERUN_CS</code>, and <code>TEAM_FIELDING_DP</code> were 91.6%, 33.9%, and 12.6% missing, respectively, and not very correlated with the target variable, so we will drop these variables. The remaining variables are less than 10% missing, so we will impute the missing values with the median of each variable. <code>TEAM_BASERUN_SB</code> is the most correlated variable with the target variable that has missingness, so we will be sure to impute this variable rather than drop it.</p>
+<p>The median imputation was picked based on the distributions of the variables with missingness: <code>TEAM_BASERUN_SB</code> and <code>TEAM_PITCHING_SO</code> have a long right tail so the median is a better imputation method than the mean. <code>TEAM_BATTING_SO</code> is bimodal, so the median is also a better imputation method than the mean for this variable. See the histograms above for the distributions of these variables.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>moneyball_train_prepared <span class="ot">&lt;-</span> moneyball_train <span class="sc">|&gt;</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(<span class="sc">-</span>TEAM_BATTING_HBP, <span class="sc">-</span>TEAM_BASERUN_CS, <span class="sc">-</span>TEAM_FIELDING_DP) <span class="sc">|&gt;</span></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">everything</span>(), <span class="sc">~</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(.), <span class="fu">median</span>(., <span class="at">na.rm =</span> <span class="cn">TRUE</span>), .)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 </section>
 <section id="build-models" class="level2">
 <h2 class="anchored" data-anchor-id="build-models">3. Build Models</h2>
