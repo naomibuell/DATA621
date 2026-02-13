@@ -1,57 +1,27 @@
 ---
-title: "Homework #1"
-format: html
-authors: Naomi Buell, Richie Rivera, Alexander Simon
-date: 3/1/2026
+title: "Multiple Linear Regression for Baseball Win Prediction"
+subtitle: "Homework #1"
+format: pdf
+author:
+  - name: Naomi Buell
+  - name: Richie Rivera
+  - name: Alexander Simon
+date: March 1, 2026
+documentclass: article
+classoption: 11pt
+geometry:
+  - margin=1in
+header-includes:
+  - \usepackage{fancyhdr}
+  - \usepackage{setspace}
+  - \onehalfspacing
+  - \pagestyle{fancy}
+  - \lhead{DATA 621}
+  - \rhead{Naomi Buell, Richie Rivera, and Alexander Simon}
+  - \setcounter{secnumdepth}{7}
 ---
 
-# Assignment Requirements
-
-## Overview
-
-In this homework assignment, you will explore, analyze and model a data set containing approximately 2200 records. Each record represents a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season. Your objective is to build a multiple linear regression model on the training data to predict the number of wins for the team. You can only use the variables given to you (or variables that you derive from the variables provided).
-
-## Deliverables:
-
--   A write-up submitted in PDF format. Your write-up should have four sections. Each one is described below. You may assume you are addressing me as a fellow data scientist, so do not need to shy away from technical details.
--   Assigned predictions (the number of wins for the team) for the evaluation data set.
--   Include your R statistical programming code in an Appendix.
-
-## Write Up:
-
-### 1. DATA EXPLORATION (25 Points)
-
-Describe the size and the variables in the moneyball training data set. Consider that too much detail will cause a manager to lose interest while too little detail will make the manager consider that you aren’t doing your job. Some suggestions are given below. Please do NOT treat this as a check list of things to do to complete the assignment. You should have your own thoughts on what to tell the boss. These are just ideas.
-
-a. Mean / Standard Deviation / Median
-b. Bar Chart or Box Plot of the data
-c. Is the data correlated to the target variable (or to other variables?)
-d. Are any of the variables missing and need to be imputed “fixed”?
-
-### 2. DATA PREPARATION (25 Points)
-
-Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this. Here are some possible transformations.
-
-a.  Fix missing values (maybe with a Mean or Median value)
-b.  Create flags to suggest if a variable was missing
-c.  Transform data by putting it into buckets
-d.  Mathematical transforms such as log or square root (or use Box-Cox) e. Combine variables (such as ratios or adding or multiplying) to create new variables
-
-### 3. BUILD MODELS (25 Points)
-
-Using the training data set, build at least three different multiple linear regression models, using different variables (or the same variables with different transformations). Since we have not yet covered automated variable selection methods, you should select the variables manually (unless you previously learned Forward or Stepwise selection, etc.). Since you manually selected a variable for inclusion into the model or exclusion into the model, indicate why this was done. Discuss the coefficients in the models, do they make sense? For example, if a team hits a lot of Home Runs, it would be reasonably expected that such a team would win more games. However, if the coefficient is negative (suggesting that the team would lose more games), then that needs to be discussed. Are you keeping the model even though it is counter intuitive? Why? The boss needs to know.
-
-### 4. SELECT MODELS (25 Points)
-
-Decide on the criteria for selecting the best multiple linear regression model. Will you select a model with slightly worse performance if it makes more sense or is more parsimonious? Discuss why you selected your model. For the multiple linear regression model, will you use a metric such as Adjusted R2 , RMSE, etc.? Be sure to explain how you can make inferences from the model, discuss multi-collinearity issues (if any), and discuss other relevant model output. Using the training data set, evaluate the multiple linear regression model based on (a) mean squared error, (b) R2 , (c) F-statistic, and (d) residual plots. Make predictions using the evaluation data set.
-
-# Analysis (Appendix)
-
-## Intro
-
-Load packages.
-
-```{r}
+```{r load-packages, include=FALSE} 
 # Load necessary libraries
 library(tidyverse)
 library(skimr)
@@ -60,28 +30,82 @@ library(ggplot2)
 library(GGally)
 ```
 
-Import data.
+# Introduction
 
-```{r}
+We analyze and model data on a professional baseball team from 1871 to 2006. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season. We build a multiple linear regression model on the training data to predict the number of wins for the team.
+
+# Methods
+
+## Data Exploration
+
+```{r data-exploration-, include=FALSE}
 # Load the training and evaluation datasets
 moneyball_train <- read_csv("moneyball-training-data (1).csv")
 moneyball_eval <- read_csv("moneyball-evaluation-data (2).csv")
+
+# Count rows and columns
+nrows <- moneyball_train |> nrow()
+ncols <- moneyball_train |> length()
+
+# Get missingness
+perc_complete <- round(moneyball_train |> n_complete() / nrows / ncols * 100, 2)
 ```
 
-## 1. Data Exploration
+The mondeyball training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of games won by the team in a season. The other variables represent various performance statistics for the team. See Appendix @tbl-summary-statistics for a preview of the data.
+
+> NOTE: Is this the correct interpretation of the target variable? If not, please correct it.
+
+```{r fig-correlation-matrix, fig.cap="Correlation matrix of all variables in the training dataset", fig.align="center", echo=FALSE}
+# Get correlation matrix
+moneyball_train_cor <- moneyball_train |>
+    cor(use = "pairwise.complete.obs")
+
+corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.4, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.3)
+```
+
+As shown in @fig-correlation-matrix, the correlation between all variables in the training data set reveals important relationships. The most correlated variables with the target variable `TARGET_WINS` are `TEAM_BASERUN_SB`, `TEAM_BATTING_HR`, and `TEAM_PITCHING_SO`, which may be strong predictors of wins. The most autocorrelated variables are `TEAM_BATTING_HR` and `TEAM_PITCHING_HR`, which makes sense as teams that hit many homeruns may also allow many homeruns, for example. We may need to avoid including these pairs of variables in the same model to prevent multicollinearity.
+
+*Describe the size and the variables in the moneyball training data set. Consider that too much detail will cause a manager to lose interest while too little detail will make the manager consider that you aren’t doing your job. Some suggestions are given below. Please do NOT treat this as a check list of things to do to complete the assignment. You should have your own thoughts on what to tell the boss. These are just ideas.*
+
+a. Mean / Standard Deviation / Median
+b. Bar Chart or Box Plot of the data
+c. Is the data correlated to the target variable (or to other variables?)
+d. Are any of the variables missing and need to be imputed “fixed”?
+
+## Data Preparation
+
+*Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this. Here are some possible transformations.*
+
+a.  Fix missing values (maybe with a Mean or Median value)
+b.  Create flags to suggest if a variable was missing
+c.  Transform data by putting it into buckets
+d.  Mathematical transforms such as log or square root (or use Box-Cox) e. Combine variables (such as ratios or adding or multiplying) to create new variables
+
+## Build Models
+
+*Using the training data set, build at least three different multiple linear regression models, using different variables (or the same variables with different transformations). Since we have not yet covered automated variable selection methods, you should select the variables manually (unless you previously learned Forward or Stepwise selection, etc.). Since you manually selected a variable for inclusion into the model or exclusion into the model, indicate why this was done. Discuss the coefficients in the models, do they make sense? For example, if a team hits a lot of Home Runs, it would be reasonably expected that such a team would win more games. However, if the coefficient is negative (suggesting that the team would lose more games), then that needs to be discussed. Are you keeping the model even though it is counter intuitive? Why? The boss needs to know.*
+
+## Select Models
+
+*Decide on the criteria for selecting the best multiple linear regression model. Will you select a model with slightly worse performance if it makes more sense or is more parsimonious? Discuss why you selected your model. For the multiple linear regression model, will you use a metric such as Adjusted R2 , RMSE, etc.? Be sure to explain how you can make inferences from the model, discuss multi-collinearity issues (if any), and discuss other relevant model output. Using the training data set, evaluate the multiple linear regression model based on (a) mean squared error, (b) R2 , (c) F-statistic, and (d) residual plots. Make predictions using the evaluation data set.*
+
+# Conclusion
+
+
+# Appendix: R Code
 
 First, we preview the data.
 
-```{r}
+```{r preview-data} 
 moneyball_train |> head()
 ```
 
 The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of wins for the team in that season. The other variables represent various performance statistics for the team.
 
-We can also check summary statistics for all variables in our training data, including checking missingness.
+We also check summary statistics for all variables in our training data, including checking missingness.
 
-```{r}
-moneyball_train |> skim()
+```{r summary-statistics, table-cap: "Summary statistics for all variables in the training dataset"}
+moneyball_train |> skim() |> as_tibble() |> knitr::kable()
 
 nrows <- moneyball_train |> nrow()
 ncols <- moneyball_train |> length()
@@ -90,7 +114,7 @@ perc_complete <- round(moneyball_train |> n_complete() / nrows / ncols * 100, 2)
 
 This training dataset contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The variables with missingness are:
 
-```{r}
+```{r summarize-missingness}
 moneyball_train |>
     summarise(across(everything(), ~ sum(is.na(.)) / nrows * 100)) |>
     pivot_longer(everything(), names_to = "variable", values_to = "missing_percentage") |>
@@ -102,7 +126,7 @@ This missingness will need to be addressed in the data preparation step.
 
 We also visualize correlations between all variables.
 
-```{r}
+```{r visualize-correlations}
 moneyball_train_cor <- moneyball_train |>
     cor(use = "pairwise.complete.obs")
 
@@ -111,7 +135,7 @@ corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.7, s
 
 The most correlated variables with the target variable `TARGET_WINS` are:
 
-```{r}
+```{r most-correlated-variables}
 moneyball_train_cor |>
     as.data.frame() |>
     rownames_to_column(var = "variable") |>
@@ -125,7 +149,7 @@ These may be strong predictors of wins.
 
 The most autocorrelated variables are:
 
-```{r}
+```{r most-autocorrelated-variables}
 moneyball_train_cor |>
     as.data.frame() |>
     rownames_to_column(var = "variable1") |>
@@ -138,7 +162,7 @@ moneyball_train_cor |>
 It makes sense that homeruns by batters (`TEAM_BATTING_HR`) and homeruns allowed (`TEAM_PITCHING_HR`) are correlated, as teams that hit many homeruns may also allow many homeruns, for example. We may need to avoid including these pairs of variables in the same model to prevent multicollinearity.
 
 We also visualize the distribution of all variables.
-```{r}
+```{r visualize-distributions, warning=FALSE}
 # Loop through all variables and create histograms
 for (var in names(moneyball_train)) {
     p <- ggplot(moneyball_train, aes_string(x = var)) +
@@ -172,4 +196,9 @@ moneyball_train_prepared <- moneyball_train |>
 ## 4. Select Models
 
 ```{r}
+```
+
+Export assigned predictions (the number of wins for the team) for the evaluation data set for deliverable.
+
+```{r export-predictions}
 ```
