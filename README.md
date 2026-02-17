@@ -2,4 +2,5 @@
 Data 621: Business Analytics and Data Mining
 
 Group 1
-Naomi Buell, Richie Rivera, Alexander Simon
+Naomi Buell, Richie Rivera, Alexander Simon, Nana Fripong, Said Naqwe
+
