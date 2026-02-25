@@ -6,6 +6,7 @@ author:
   - name: Naomi Buell
   - name: Richie Rivera
   - name: Alexander Simon
+  - name:  Nana Frimpong 
 date: March 1, 2026
 documentclass: article
 classoption: 11pt
@@ -17,7 +18,7 @@ header-includes:
   - \onehalfspacing
   - \pagestyle{fancy}
   - \lhead{DATA 621}
-  - \rhead{Naomi Buell, Richie Rivera, and Alexander Simon}
+  - \rhead{Naomi Buell, Richie Rivera,Alexander Simon and Nana Frimpong}
   - \setcounter{secnumdepth}{7}
 ---
 
@@ -96,7 +97,7 @@ NB: Consider adding Bar Chart or Box Plot of the data or anything else that you 
 
 We handled high missingness in the variables `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` (91.6%, 33.9%, and 12.6% missing, respectively), which are not very correlated with the target variable, by excluding these variables. The remaining variables are less than 10% missing, so we will impute the missing values with the median of each variable. We avoid dropping `TEAM_BASERUN_SB` as it is the most correlated variable with the target variable that has missingness, and instead impute it to preserve this potentially strong predictor of wins.
 
-The median imputation was picked based on the distributions of the variables with missingness: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. `TEAM_BATTING_SO` is bimodal, so the median is also a better imputation method than the mean for this variable. See the histograms above for the distributions of these variables. 
+The median imputation was picked based on the distributions of missing variables: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. Both variables have observed have extreme outliers pulling the mean towards a right direction compared to where most the data sits. When the distribution of variables reveals two distinct peaks as observed in `TEAM_BATTING_SO`, we can refer to this distribution as  bimodal. Since the mean of bimodal falls between two peaks, this area is observed to be the underrepresented region of the missing data. The median imputation is utilized to approach one of the two clusters of missing variables with the largest distribution of missign variables. Below are the histograms  for the distributions of these variables. 
 
 ```{r}
 #| label: histograms-missing-variables
@@ -130,9 +131,144 @@ for (i in seq_along(vars_with_missingness)) {
 patchwork::wrap_plots(plots, ncol = 3) + patchwork::plot_layout(guides = 'collect')
 ```
 
+
+To begin by remove variables with high missinng  vairables and low correlation with  `TARGET_WINS`: `TEAM_BATTING_HBP` (91.6% missing), `TEAM_BASERUN_CS` (33.9% missing),  and `TEAM_FIELDING_DP` (12.6% missing).
+
+```{r}
+#| label: drop-variables
+#| echo: true
+#| warning: false
+
+# Drop high missign vrianbels and low-correlation variables with the datat
+# these variables lack a solid relationship with response variable TARGET_WINS
+moneyball_clean <- moneyball_train |>
+  select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
+```
+
+Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator  is created to preserve infomation  that value was missing in first place. Our indicator for each flag follows (1 =  missing 0 = present)
+
+```{r}
+#| label: missingness flags inddicator
+#| echo: true
+#| warning: false
+moneyball_clean <- moneyball_clean |>
+  mutate(
+    TEAM_BASERUN_SB_MISSING  = as.integer(is.na(TEAM_BASERUN_SB)),
+    TEAM_BATTING_SO_MISSING  = as.integer(is.na(TEAM_BATTING_SO)),
+    TEAM_PITCHING_SO_MISSING = as.integer(is.na(TEAM_PITCHING_SO))
+  )
+```
+
+Imputation now occurs based on the distribution of missing data of the following variables  `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO` , and `TEAM_BATTING_SO`. `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are right skewed therefore it is imputated around the mean and `TEAM_BATTING_SO` is bimoal , so we can imputate around with the media to avoid placing the imputated values in region between two peak where only few observation exist. 
+```{r}
+#| label: imputation
+#| echo: true
+#| warning: false
+
+moneyball_clean <- moneyball_clean %>%
+  mutate(
+    # Mean imputation for right-tailed variables
+    TEAM_BASERUN_SB = ifelse(
+      is.na(TEAM_BASERUN_SB),
+      mean(TEAM_BASERUN_SB, na.rm = TRUE),
+      TEAM_BASERUN_SB
+    ),
+    TEAM_PITCHING_SO = ifelse(
+      is.na(TEAM_PITCHING_SO),
+      mean(TEAM_PITCHING_SO, na.rm = TRUE),
+      TEAM_PITCHING_SO
+    ),
+
+    # Median imputation for bimodal variable distribution
+    TEAM_BATTING_SO = ifelse(
+      is.na(TEAM_BATTING_SO),
+      median(TEAM_BATTING_SO, na.rm = TRUE),
+      TEAM_BATTING_SO
+    )
+  )
+```
+
+When a distribution is observe ot be skewed to th right, meaning small number of outliers has influence on the response variable `TARGET_WINS`, the log transformation can be applied to balance the scale of distribution. Utlizing teh log compress the distribution of missing variable closer to symmetic shape. This makes the relationship with `TARGET_WINS` more lienar and easier for the model to capture. Log1p is used to handle any zero without producing undefined resutls
+
+
+```{r}
+#| label: log-transformations
+#| echo: true
+#| warning: false
+
+# Log transform right-skewed variables
+moneyball_clean <- moneyball_clean %>%
+  mutate(
+    LOG_TEAM_BASERUN_SB  = log1p(TEAM_BASERUN_SB),
+    LOG_TEAM_PITCHING_SO = log1p(TEAM_PITCHING_SO),
+    LOG_TEAM_FIELDING_E  = log1p(TEAM_FIELDING_E)
+  )
+```
+
+We can create three new variables that captures negative and postive impact on the wins for the team. 
+
+```{r}
+#| label: feature-engineering
+#| echo: true
+#| warning: false
+
+#  HR_DIFFERENTIAL and BAT_BB_SO_RATIO
+moneyball_clean <- moneyball_clean |>
+  mutate(
+# Net home run differential (offensive power vs pitching vulnerability)
+# The team that hits more home runs that it gives up will produce positive value
+# the team that allows more home runs than it hits will produce a negative 
+#value, meaing they loosing the game
+# Zero indicates the team is even in home runs
+    HR_DIFFERENTIAL = TEAM_BATTING_HR - TEAM_PITCHING_HR,
+  # Here we can measure how batter can judge whch pitch they would take a swing at
+    # If the ratio is greater than 1, it reveals the team walk more than they strike 
+  #showing a more cohesive and patient team
+    # This may happen if a batter force the pitchers to throw more pitches
+    
+    BAT_BB_SO_RATIO = ifelse(TEAM_BATTING_SO > 0,
+                             TEAM_BATTING_BB / TEAM_BATTING_SO, NA)
+  )
+
+#  Impute missing values in BAT_BB_SO_RATIO with median
+moneyball_clean <- moneyball_clean |>
+  mutate(
+    BAT_BB_SO_RATIO = ifelse(is.na(BAT_BB_SO_RATIO),
+                             median(BAT_BB_SO_RATIO, na.rm = TRUE), BAT_BB_SO_RATIO)
+  )
+```
+
+
+ Finally we can verify that there no missing variables taht remain based on teh results of our impuation 
+
+```{r}
+#| label: tbl-verify-imputation
+#| tbl-cap: "Remaining missing values after imputation"
+#| echo: true
+#| warning: false
+
+# Verify no remaining missingness
+moneyball_clean |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  tidyr::pivot_longer(everything(),
+                      names_to  = "Variable",
+                      values_to = "Missing") |>
+  filter(Missing > 0) |>
+  knitr::kable()
+```
+
+
+
 *Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this. Here are some possible transformations.*
 
+
+
+
+
+
 b.  *Create flags to suggest if a variable was missing*
+
+
 c.  *Transform data by putting it into buckets*
 d.  *Mathematical transforms such as log or square root (or use Box-Cox) e. Combine variables (such as ratios or adding or multiplying) to create new variables*
 
