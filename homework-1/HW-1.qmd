@@ -255,6 +255,7 @@ moneyball_clean |>
                       values_to = "Missing") |>
   filter(Missing > 0) |>
   knitr::kable()
+
 ```
 
 
