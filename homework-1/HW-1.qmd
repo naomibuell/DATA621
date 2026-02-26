@@ -6,7 +6,8 @@ author:
   - name: Naomi Buell
   - name: Richie Rivera
   - name: Alexander Simon
-  - name:  Nana Frimpong 
+  - name: Nana Frimpong 
+  - name: Said Naqwe
 date: March 1, 2026
 documentclass: article
 classoption: 11pt
@@ -18,7 +19,7 @@ header-includes:
   - \onehalfspacing
   - \pagestyle{fancy}
   - \lhead{DATA 621}
-  - \rhead{Naomi Buell, Richie Rivera,Alexander Simon and Nana Frimpong}
+  - \rhead{Naomi Buell, Richie Rivera, Alexander Simon, Said Naqwe, and Nana Frimpong}
   - \setcounter{secnumdepth}{7}
 ---
 
