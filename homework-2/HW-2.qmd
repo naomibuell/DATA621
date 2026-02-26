@@ -23,27 +23,52 @@ header-includes:
   - \setcounter{secnumdepth}{7}
 ---
 
-# Instructions
+```{r}
+#| label: Load necessary libraries
+#| include: FALSE
+library(tidyverse)
+library(skimr)
+library(corrplot)
+library(ggplot2)
+library(GGally)
+library(janitor)
+```
+
+# Homework Solutions
 
 1.  *Download the classification output data set (attached in Blackboard to the assignment).*
 
     ```{r}
+    #| label: Get and summarize data
+    classifications_output_data <- read.csv("classification-output-data (2).csv")
 
+    classifications_output_data |> skim()
     ```
 
 2.  *The data set has three key columns we will use:*
 
--   *class: the actual class for the observation*
+-   *`class`: the actual class for the observation*
 
--   *scored.class: the predicted class for the observation (based on a threshold of 0.5)*
+-   *`scored.class`: the predicted class for the observation (based on a threshold of 0.5)*
 
--   *scored.probability: the predicted probability of success for the observation*
+-   *`scored.probability`: the predicted probability of success for the observation*
 
     *Use the table() function to get the raw confusion matrix for this scored dataset. Make sure you understand the output. In particular, do the rows represent the actual or predicted class? The columns?*
 
     ```{r}
-
+    #| label: Confusion matrix
+    confusion_matrix <- table(classifications_output_data$class, classifications_output_data$scored.class)
+    confusion_matrix
     ```
+
+    ```{r}
+    #| label: True negatives and false negatives
+    #| include: FALSE
+    tn <- confusion_matrix[1,1]
+    fn <- confusion_matrix[2,1]
+    ```
+
+    The rows represent the actual class (`class`) and the columns represent the predicted class (`scored.class`). For example, there are `r tn` observations where the actual class is 0 and the predicted class is also 0 (true negatives), and there are `r fn` observations where the actual class is 1 but the predicted class is 0 (false negatives).
 
 3.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.*
 
@@ -52,7 +77,20 @@ header-includes:
     $$
 
     ```{r}
+    #| label: Accuracy function
 
+    calculate_accuracy <- function(data, actual_col, predicted_col) {
+      confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+      tp <- confusion_matrix[2, 2]
+      tn <- confusion_matrix[1, 1]
+      fp <- confusion_matrix[1, 2]
+      fn <- confusion_matrix[2, 1]
+      accuracy <- (tp + tn) / (tp + fp + tn + fn)
+      return(accuracy)
+    }
+
+    # Test function
+    calculate_accuracy(classifications_output_data, "class", "scored.class")
     ```
 
 4.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.*
@@ -64,7 +102,7 @@ header-includes:
     *Verify that you get an accuracy and an error rate that sums to one.*
 
     ```{r}
-
+    
     ```
 
 5.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.*
