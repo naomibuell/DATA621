@@ -6,7 +6,7 @@ author:
   - name: Naomi Buell
   - name: Richie Rivera
   - name: Alexander Simon
-  - name:  Nana Frimpong 
+  - name: Nana Frimpong 
 date: March 1, 2026
 documentclass: article
 classoption: 11pt
@@ -18,7 +18,7 @@ header-includes:
   - \onehalfspacing
   - \pagestyle{fancy}
   - \lhead{DATA 621}
-  - \rhead{Naomi Buell, Richie Rivera,Alexander Simon and Nana Frimpong}
+  - \rhead{Naomi Buell, Richie Rivera, Alexander Simon and Nana Frimpong}
   - \setcounter{secnumdepth}{7}
 ---
 
@@ -27,7 +27,6 @@ header-includes:
 library(tidyverse)
 library(skimr)
 library(corrplot)
-library(ggplot2)
 library(GGally)
 library(janitor)
 ```
@@ -39,6 +38,8 @@ We analyze and model data on a professional baseball team from 1871 to 2006. Eac
 # Methods
 
 ## Data Exploration
+
+*Describe the size and the variables in the moneyball training data set.*
 
 ```{r}
 #| label: data-exploration
@@ -56,10 +57,12 @@ ncols <- moneyball_train |> length()
 perc_complete <- round(moneyball_train |> n_complete() / nrows / ncols * 100, 2)
 ```
 
-The mondeyball training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of games won by the team in a season. The other variables represent various performance statistics for the team. See @tbl-summary-statistics for descriptive characteristics of the training data. Variables range from 0% to 92% missing. We address missingness by dropping columns and imputing in the Data Preparation section.
+### Data Characteristics
+
+The moneyball training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of games won by the team in a season. The other variables represent various performance statistics for the team. See @tbl-summary-statistics for descriptive characteristics of the training data. Variables range from 0% to 92% missing. We address missingness by dropping columns and imputing in the Data Preparation section.
 
 ::: callout-note
-NB: Not sure if target_wins represents the number of games won per season. Is each row a season? Is this the correct interpretation of the target variable?
+NB: Not sure if `TARGET_WINS` represents the number of games won per season. Is each row a season? Is this the correct interpretation of the target variable?
 :::
 
 ```{r}
@@ -70,9 +73,12 @@ NB: Not sure if target_wins represents the number of games won per season. Is ea
 tbl_summ_stats <- moneyball_train |> skim_without_charts() |> janitor::clean_names() |> as_tibble() |>
     rename(Variable = skim_variable, "Completeness rate" = complete_rate, "Mean" = numeric_mean, "SD" = numeric_sd, "P50" = numeric_p50, "Min" = numeric_p0, "P25" = numeric_p25, "P75" = numeric_p75, "Max" = numeric_p100) |>
     select(Variable, "Completeness rate", Mean, Min, P25, P50, P75, Max) |>
-    mutate(across(where(is.numeric), ~ signif(., 2))) |> knitr::kable() 
+    mutate(across(where(is.numeric), ~ signif(., 2))) |> knitr::kable()
+
 tbl_summ_stats
 ```
+
+### Correlation Matrix
 
 ```{r}
 #| label: fig-correlation-matrix
@@ -87,17 +93,31 @@ moneyball_train_cor <- moneyball_train |>
 corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.4, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.3)
 ```
 
-The correlation between all variables are shown @fig-correlation-matrix. The most correlated variables with the target variable `TARGET_WINS` are `TEAM_BATTING_H`, `TEAM_BATTING_2B`, and `TEAM_BATTING_BB`, which may be strong predictors of wins. The most autocorrelated variables are `TEAM_BATTING_HR` and `TEAM_PITCHING_HR`, which makes sense as teams that hit many homeruns may also allow many homeruns, for example.
+::: callout-note
+Question from Alex: What is meant by "autocorrelated variables"? As far I know, autocorrelation only applies to time series analysis, which isn't what we're doing here.
+:::
+
+The correlation between all variables are shown @fig-correlation-matrix. The most correlated variables with the target variable `TARGET_WINS` are `TEAM_BATTING_H`, `TEAM_BATTING_2B`, and `TEAM_BATTING_BB`, which may be predictors of wins. The most autocorrelated variables are `TEAM_BATTING_HR` and `TEAM_PITCHING_HR`, which makes sense as teams that hit many homeruns may also allow many homeruns, for example.
 
 ::: callout-note
 NB: Consider adding Bar Chart or Box Plot of the data or anything else that you think is interesting.
 :::
 
+::: callout-note
+Comment from Alex: I think we should add box plots or some other way to identify outliers (eg, Z scores). It can be hard to see outliers in histograms. If there are bad leverage points in our models, we may need to create dummy variables for the outliers.
+:::
+
 ## Data Preparation
 
-We handled high missingness in the variables `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` (91.6%, 33.9%, and 12.6% missing, respectively), which are not very correlated with the target variable, by excluding these variables. The remaining variables are less than 10% missing, so we will impute the missing values with the median of each variable. We avoid dropping `TEAM_BASERUN_SB` as it is the most correlated variable with the target variable that has missingness, and instead impute it to preserve this potentially strong predictor of wins.
+*Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this.*
 
-The median imputation was picked based on the distributions of missing variables: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. Both variables have observed have extreme outliers pulling the mean towards a right direction compared to where most the data sits. When the distribution of variables reveals two distinct peaks as observed in `TEAM_BATTING_SO`, we can refer to this distribution as  bimodal. Since the mean of bimodal falls between two peaks, this area is observed to be the underrepresented region of the missing data. The median imputation is utilized to approach one of the two clusters of missing variables with the largest distribution of missign variables. Below are the histograms  for the distributions of these variables. 
+We handled high missingness in the variables `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` (91.6%, 33.9%, and 12.6% missing, respectively), which are not very correlated with the target variable, by excluding these variables. The remaining variables had less than 10% missing, so we will impute the missing values with the median of each variable. We avoid dropping `TEAM_BASERUN_SB` as it is the most correlated variable with the target variable that has missingness, and instead impute it.
+
+The median imputation was picked based on the distributions of missing variables: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. Both variables have observed have extreme outliers pulling the mean towards a right direction compared to where most the data sits. When the distribution of variables reveals two distinct peaks as observed in `TEAM_BATTING_SO`, we can refer to this distribution as bimodal. Since the mean of bimodal falls between two peaks, this area is observed to be the underrepresented region of the missing data. The median imputation is utilized to approach one of the two clusters of missing variables with the largest distribution of missing variables. Below are the histograms for the distributions of these variables.
+
+::: callout-note
+Comment from Alex: Can we plot the histograms below separately and then combine them? Currently, all 3 histograms use the default binwidth, which may not apply to every plot (the middle one in particular needs a different value). Alternatively, we can consider a density histogram that doesn't use binwidth.
+:::
 
 ```{r}
 #| label: histograms-missing-variables
@@ -131,24 +151,23 @@ for (i in seq_along(vars_with_missingness)) {
 patchwork::wrap_plots(plots, ncol = 3) + patchwork::plot_layout(guides = 'collect')
 ```
 
-
-To begin by remove variables with high missinng  vairables and low correlation with  `TARGET_WINS`: `TEAM_BATTING_HBP` (91.6% missing), `TEAM_BASERUN_CS` (33.9% missing),  and `TEAM_FIELDING_DP` (12.6% missing).
+To begin by remove variables with high missingness variables and low correlation with `TARGET_WINS`: `TEAM_BATTING_HBP` (91.6% missing, r=0.07), `TEAM_BASERUN_CS` (33.9% missing, r=0.02), and `TEAM_FIELDING_DP` (12.6% missing, r=-0.03).
 
 ```{r}
 #| label: drop-variables
 #| echo: true
 #| warning: false
 
-# Drop high missign vrianbels and low-correlation variables with the datat
-# these variables lack a solid relationship with response variable TARGET_WINS
+# Drop high missingness variables and low-correlation variables with the data
+# These variables lack a strong relationship with response variable TARGET_WINS
 moneyball_clean <- moneyball_train |>
   select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
 ```
 
-Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator  is created to preserve infomation  that value was missing in first place. Our indicator for each flag follows (1 =  missing 0 = present)
+Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator is created to preserve information that the value was originally missing. Our indicator for each flag is (1 = missing, 0 = present)
 
 ```{r}
-#| label: missingness flags inddicator
+#| label: missingness flags indicator
 #| echo: true
 #| warning: false
 moneyball_clean <- moneyball_clean |>
@@ -159,7 +178,8 @@ moneyball_clean <- moneyball_clean |>
   )
 ```
 
-Imputation now occurs based on the distribution of missing data of the following variables  `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO` , and `TEAM_BATTING_SO`. `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are right skewed therefore it is imputated around the mean and `TEAM_BATTING_SO` is bimoal , so we can imputate around with the media to avoid placing the imputated values in region between two peak where only few observation exist. 
+Imputation is now based on the distribution of missing data of the following variables. `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO` , and `TEAM_BATTING_SO`. `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are right skewed, therefore they are imputed around the mean. `TEAM_BATTING_SO` is bimodal, so we can impute around the median to avoid placing the imputed values in region between two peaks where only a few observations exist.
+
 ```{r}
 #| label: imputation
 #| echo: true
@@ -179,7 +199,7 @@ moneyball_clean <- moneyball_clean %>%
       TEAM_PITCHING_SO
     ),
 
-    # Median imputation for bimodal variable distribution
+    # Median imputation for bimodal variable
     TEAM_BATTING_SO = ifelse(
       is.na(TEAM_BATTING_SO),
       median(TEAM_BATTING_SO, na.rm = TRUE),
@@ -188,8 +208,7 @@ moneyball_clean <- moneyball_clean %>%
   )
 ```
 
-When a distribution is observe ot be skewed to th right, meaning small number of outliers has influence on the response variable `TARGET_WINS`, the log transformation can be applied to balance the scale of distribution. Utlizing teh log compress the distribution of missing variable closer to symmetic shape. This makes the relationship with `TARGET_WINS` more lienar and easier for the model to capture. Log1p is used to handle any zero without producing undefined resutls
-
+When a distribution is observed to be skewed to the right, meaning small number of outliers has influence on the response variable `TARGET_WINS`, the log transformation can be applied to balance the scale of distribution. Utilizing log compresses the distribution of missing variable closer to symmetric shape. This makes the relationship with `TARGET_WINS` more linear and easier for the model to capture. `log1p` is used to handle any zero without producing undefined results.
 
 ```{r}
 #| label: log-transformations
@@ -205,7 +224,7 @@ moneyball_clean <- moneyball_clean %>%
   )
 ```
 
-We can create three new variables that captures negative and postive impact on the wins for the team. 
+We can create three new variables that captures negative and positive impact on the wins for the team.
 
 ```{r}
 #| label: feature-engineering
@@ -223,7 +242,7 @@ moneyball_clean <- moneyball_clean |>
     HR_DIFFERENTIAL = TEAM_BATTING_HR - TEAM_PITCHING_HR,
   # Here we can measure how batter can judge whch pitch they would take a swing at
     # If the ratio is greater than 1, it reveals the team walk more than they strike 
-  #showing a more cohesive and patient team
+  # showing a more cohesive and patient team
     # This may happen if a batter force the pitchers to throw more pitches
     
     BAT_BB_SO_RATIO = ifelse(TEAM_BATTING_SO > 0,
@@ -238,8 +257,11 @@ moneyball_clean <- moneyball_clean |>
   )
 ```
 
+Finally we can verify that there no missing variables that remain based on the results of our imputation
 
- Finally we can verify that there no missing variables taht remain based on teh results of our impuation 
+::: callout-note
+Comment from Alex: I tweaked the block below. The original code results in a blank output. While technically correct, it could make the prof wonder whether the code runs correctly. It'd be better to show some type of output, eg zero variables have missingness.
+:::
 
 ```{r}
 #| label: tbl-verify-imputation
@@ -247,31 +269,106 @@ moneyball_clean <- moneyball_clean |>
 #| echo: true
 #| warning: false
 
-# Verify no remaining missingness
+# Verify that no variables have remaining missingness
 moneyball_clean |>
   summarise(across(everything(), ~ sum(is.na(.)))) |>
   tidyr::pivot_longer(everything(),
                       names_to  = "Variable",
                       values_to = "Missing") |>
   filter(Missing > 0) |>
-  knitr::kable()
+  nrow()
+  # knitr::kable()
 
 ```
 
+## Assumptions for Linear Regression
 
+Linear regression makes four important assumptions:
 
-*Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this. Here are some possible transformations.*
+1.  The independent and dependent variables are linearly related.
+2.  The errors are independent of each other.
+3.  The errors have constant variance.
+4.  The errors are normally distributed.
 
+The last three will be evaluated after models are built (section 3). Here, we test the assumption of linearity using pair plots of the variables in the cleaned training dataset. To avoid overcrowded plots, we divided the variables into three groups.
 
+### Plot 1. Batting and baserun variables
 
+-   In the first row, the correlation coefficients show that all batting and baserun variables except `TEAM_BATTING_SO` have significant correlations with the target variable.
 
+-   In the first column, the scatterplots show that `TEAM_BATTING_H` and `TEAM_BATTING_2B` have the clearest linear relationship with `TARGET_WINS`.
 
+-   There are no obvious nonlinear relationships between batting and baserun variables and the target variable.
 
-b.  *Create flags to suggest if a variable was missing*
+```{r}
+# This block takes a few seconds
+moneyball_clean |>
+  select(-c(ends_with('MISSING'))) |>  # omit categorical (flag) variables
+  select(TARGET_WINS, starts_with('TEAM_BATTING'), TEAM_BASERUN_SB) |>
+  ggpairs(
+    # Color transparency and small data points help reduce overplotting
+    mapping = aes(alpha = 0.1),
+    lower = list(continuous = wrap('points', size = 0.01)),
+    progress = FALSE
+    ) +
+    theme(
+      strip.text = element_text(size = 8)
+    )
+```
 
+### Plot 2. Pitching and fielding variables
 
-c.  *Transform data by putting it into buckets*
-d.  *Mathematical transforms such as log or square root (or use Box-Cox) e. Combine variables (such as ratios or adding or multiplying) to create new variables*
+-   In the first row, the correlation coefficients show that all pitching variables and the fielding variable have significant correlations with the target variable.
+
+-   In the first column, the scatterplots show that T`EAM_PITCHING_BB` has the clearest linear relationship with `TARGET_WINS`.
+
+    -   Two independent variables (`TEAM_PITCHING_H` and `TEAM_PITCHING_SO`) appear to be related by a horizontal line. Technically, this satisfies the assumption of linearity, but it suggests that these variables do not have predictive value.
+
+-   There are no obvious nonlinear relationships between pitching and fielding variables and the target variable.
+
+```{r}
+# This block takes a few seconds
+moneyball_clean |>
+  select(-c(ends_with('MISSING'))) |>  # omit categorical (flag) variables
+  select(TARGET_WINS, starts_with('TEAM_PITCHING'), TEAM_FIELDING_E) |>
+  ggpairs(
+    mapping = aes(alpha = 0.1),
+    lower = list(continuous = wrap('points', size = 0.01)),
+    progress = FALSE
+    ) +
+    theme(
+      strip.text = element_text(size = 8)
+    )    
+```
+
+### Plot 3. New variables
+
+-   In the first row, the correlation coefficients show that four of the five newly created variables have significant correlations with the target variable. The exception was `LOG_TEAM_PITCHING_SO`, which had a correlation coefficient of 0.003.
+
+-   In the first column, the scatterplots show that `BAT_BB_SO_RATIO` has the clearest linear relationship with `TARGET_WINS`.
+
+    -   `LOG_TEAM_PITCHING_SO` appears to be related by a horizontal line. Although this satisfies the assumption of linearity, it suggests that this variable may not have predictive value.
+
+-   There are no obvious nonlinear relationships between the newly created variables and the target variable.
+
+```{r}
+# This block takes a few seconds
+# Pair plots for new variables
+moneyball_clean |>
+  select(TARGET_WINS, starts_with('LOG'), HR_DIFFERENTIAL, BAT_BB_SO_RATIO) |>
+  ggpairs(
+    mapping = aes(alpha = 0.1),
+    lower = list(continuous = wrap('points', size = 0.01)),
+    progress = FALSE
+    ) +
+    theme(
+      strip.text = element_text(size = 8)
+    )
+```
+
+### Conclusions
+
+The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
 
 ## Build Models
 
