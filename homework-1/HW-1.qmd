@@ -40,8 +40,6 @@ We analyze and model data on a professional baseball team from 1871 to 2006. Eac
 
 ## Data Exploration
 
-*Describe the size and the variables in the moneyball training data set.*
-
 ```{r}
 #| label: data-exploration
 #| include: false
@@ -60,11 +58,7 @@ perc_complete <- round(moneyball_train |> n_complete() / nrows / ncols * 100, 2)
 
 ### Data Characteristics
 
-The moneyball training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of games won by the team in a season. The other variables represent various performance statistics for the team. See @tbl-summary-statistics for descriptive characteristics of the training data. Variables range from 0% to 92% missing. We address missingness by dropping columns and imputing in the Data Preparation section.
-
-::: callout-note
-NB: Not sure if `TARGET_WINS` represents the number of games won per season. Is each row a season? Is this the correct interpretation of the target variable?
-:::
+The moneyball training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of games won by the team. The other variables represent various performance statistics for the team. See @tbl-summary-statistics for descriptive characteristics of the training data. Variables range from 0% to 92% missing. We address missingness by dropping columns and imputing in the Data Preparation section.
 
 ```{r}
 #| label: tbl-summary-statistics
@@ -86,6 +80,7 @@ tbl_summ_stats
 #| fig-cap: "Correlation matrix of all variables in the training dataset"
 #| fig.align: "center"
 #| echo: false
+#| warning: false
 
 # Get correlation matrix
 moneyball_train_cor <- moneyball_train |>
@@ -94,31 +89,34 @@ moneyball_train_cor <- moneyball_train |>
 corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.4, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.3)
 ```
 
-::: callout-note
-Question from Alex: What is meant by "autocorrelated variables"? As far I know, autocorrelation only applies to time series analysis, which isn't what we're doing here.
-:::
+The correlation between all variables are shown @fig-correlation-matrix. The most correlated variables with the target variable `TARGET_WINS` are `TEAM_BATTING_H`, `TEAM_BATTING_2B`, and `TEAM_BATTING_BB`, which may be predictors of wins. The most correlated independent variables are `TEAM_BATTING_HR` and `TEAM_PITCHING_HR`, which makes sense as teams that hit many homeruns may also allow many homeruns, for example.
 
-The correlation between all variables are shown @fig-correlation-matrix. The most correlated variables with the target variable `TARGET_WINS` are `TEAM_BATTING_H`, `TEAM_BATTING_2B`, and `TEAM_BATTING_BB`, which may be predictors of wins. The most autocorrelated variables are `TEAM_BATTING_HR` and `TEAM_PITCHING_HR`, which makes sense as teams that hit many homeruns may also allow many homeruns, for example.
+@fig-box-plots shows the distribution of z-scores of all variable observations, and identifies outliers in the training data. `TEAM-PITCHING_SO`, `TEAM_PITCHING_H`, and `TEAM_PITCHING_BB` have many high outliers. If there are bad leverage points in our models, we may need to create dummy variables for the outliers.
 
-::: callout-note
-NB: Consider adding Bar Chart or Box Plot of the data or anything else that you think is interesting.
-:::
+```{r}
+#| label: fig-box-plots
+#| fig-cap: "Box plots for identifying outliers in the training data"
+#| fig.align: "center"
+#| echo: false
+#| warning: false
 
-::: callout-note
-Comment from Alex: I think we should add box plots or some other way to identify outliers (eg, Z scores). It can be hard to see outliers in histograms. If there are bad leverage points in our models, we may need to create dummy variables for the outliers.
-:::
+moneyball_train |>
+    pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") |>
+    group_by(Variable) |>
+    mutate(Z_Score = scale(Value)[,1]) |>
+    ungroup() |>
+    ggplot(aes(x = Z_Score, y = Variable)) +
+    geom_boxplot() +
+    theme_minimal() +
+    theme(panel.grid = element_blank(), axis.text.y = element_text(angle = 0)) +
+    xlab("Z-Score")
+```
 
 ## Data Preparation
-
-*Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this.*
 
 We handled high missingness in the variables `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` (91.6%, 33.9%, and 12.6% missing, respectively), which are not very correlated with the target variable, by excluding these variables. The remaining variables had less than 10% missing, so we will impute the missing values with the median of each variable. We avoid dropping `TEAM_BASERUN_SB` as it is the most correlated variable with the target variable that has missingness, and instead impute it.
 
 The median imputation was picked based on the distributions of missing variables: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. Both variables have observed have extreme outliers pulling the mean towards a right direction compared to where most the data sits. When the distribution of variables reveals two distinct peaks as observed in `TEAM_BATTING_SO`, we can refer to this distribution as bimodal. Since the mean of bimodal falls between two peaks, this area is observed to be the underrepresented region of the missing data. The median imputation is utilized to approach one of the two clusters of missing variables with the largest distribution of missing variables. Below are the histograms for the distributions of these variables.
-
-::: callout-note
-Comment from Alex: Can we plot the histograms below separately and then combine them? Currently, all 3 histograms use the default binwidth, which may not apply to every plot (the middle one in particular needs a different value). Alternatively, we can consider a density histogram that doesn't use binwidth.
-:::
 
 ```{r}
 #| label: histograms-missing-variables
@@ -126,30 +124,32 @@ Comment from Alex: Can we plot the histograms below separately and then combine 
 #| warning: false
 #| echo: false
 
-# Loop through variables with missingness and create histograms
-plots <- list()
-
-# Create histogram for TEAM_BASERUN_SB
-p <- ggplot(moneyball_train, aes_string(x = "TEAM_BASERUN_SB")) +
-    geom_histogram() +
+# Create density curve for TEAM_BASERUN_SB
+p1 <- ggplot(moneyball_train, aes(x = TEAM_BASERUN_SB)) +
+    geom_density() +
     theme_minimal() +
     theme(panel.grid = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
-    ylab("Frequency")
-plots[[length(plots) + 1]] <- p
+    xlab("TEAM_BASERUN_SB") +
+    ylab("Density")
 
-# Create histograms for other variables with missingness
-vars_with_missingness <- c("TEAM_PITCHING_SO", "TEAM_BATTING_SO")
-for (i in seq_along(vars_with_missingness)) {
-    var <- vars_with_missingness[i]
-    p <- ggplot(moneyball_train, aes_string(x = var)) +
-        geom_histogram() +
-        theme_minimal() +
-        theme(panel.grid = element_blank(), axis.title.y = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7))
-    plots[[length(plots) + 1]] <- p
-}
+# Create density curve for TEAM_PITCHING_SO
+p2 <- ggplot(moneyball_train, aes(x = TEAM_PITCHING_SO)) +
+    geom_density() +
+    theme_minimal() +
+    theme(panel.grid = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
+    xlab("TEAM_PITCHING_SO") +
+    ylab("")
 
-# Patch together the histograms
-patchwork::wrap_plots(plots, ncol = 3) + patchwork::plot_layout(guides = 'collect')
+# Create density curve for TEAM_BATTING_SO
+p3 <- ggplot(moneyball_train, aes(x = TEAM_BATTING_SO)) +
+    geom_density() +
+    theme_minimal() +
+    theme(panel.grid = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
+    xlab("TEAM_BATTING_SO") +
+    ylab("") 
+    
+# Combine the histograms
+patchwork::wrap_plots(p1, p2, p3, ncol = 3) + patchwork::plot_layout(guides = 'collect')
 ```
 
 To begin by remove variables with high missingness variables and low correlation with `TARGET_WINS`: `TEAM_BATTING_HBP` (91.6% missing, r=0.07), `TEAM_BASERUN_CS` (33.9% missing, r=0.02), and `TEAM_FIELDING_DP` (12.6% missing, r=-0.03).
@@ -458,7 +458,7 @@ moneyball_train_cor |>
 
 These may be strong predictors of wins.
 
-The most autocorrelated variables are:
+The most correlated independent variables are:
 
 ```{r}
 #| label: most-autocorrelated-variables
@@ -474,6 +474,25 @@ moneyball_train_cor |>
 ```
 
 It makes sense that homeruns by batters (`TEAM_BATTING_HR`) and homeruns allowed (`TEAM_PITCHING_HR`) are correlated, as teams that hit many homeruns may also allow many homeruns, for example. We may need to avoid including these pairs of variables in the same model to prevent multicollinearity.
+
+We also visualize the distribution of z-scores of all variable observations, and identify outliers in the training data.
+
+```{r}
+#| label: box-plots
+#| fig-cap: "Box plots for identifying outliers in the training data"
+#| fig.align: "center"
+
+moneyball_train |>
+    pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") |>
+    group_by(Variable) |>
+    mutate(Z_Score = scale(Value)[,1]) |>
+    ungroup() |>
+    ggplot(aes(x = Z_Score, y = Variable)) +
+    geom_boxplot() +
+    theme_minimal() +
+    theme(panel.grid = element_blank(), axis.text.y = element_text(angle = 0)) +
+    xlab("Z-Score")
+```
 
 We also visualize the distribution of all variables.
 

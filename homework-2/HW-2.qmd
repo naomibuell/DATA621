@@ -1,0 +1,184 @@
+---
+title: "Classification Metrics"
+subtitle: "Homework #2"
+format: pdf
+author:
+  - name: Naomi Buell
+  - name: Richie Rivera
+  - name: Alexander Simon
+  - name: Nana Frimpong 
+  - name: Said Naqwe
+date: March 22, 2026
+documentclass: article
+classoption: 11pt
+geometry:
+  - margin=1in
+header-includes:
+  - \usepackage{fancyhdr}
+  - \usepackage{setspace}
+  - \onehalfspacing
+  - \pagestyle{fancy}
+  - \lhead{DATA 621}
+  - \rhead{Naomi Buell, Richie Rivera, Alexander Simon, Said Naqwe, and Nana Frimpong}
+  - \setcounter{secnumdepth}{7}
+---
+
+```{r}
+#| label: Load necessary libraries
+#| include: FALSE
+library(tidyverse)
+library(skimr)
+library(corrplot)
+library(ggplot2)
+library(GGally)
+library(janitor)
+```
+
+# Homework Solutions
+
+1.  *Download the classification output data set (attached in Blackboard to the assignment).*
+
+    ```{r}
+    #| label: Get and summarize data
+    classifications_output_data <- read.csv("classification-output-data (2).csv")
+
+    classifications_output_data |> skim()
+    ```
+
+2.  *The data set has three key columns we will use:*
+
+-   *`class`: the actual class for the observation*
+
+-   *`scored.class`: the predicted class for the observation (based on a threshold of 0.5)*
+
+-   *`scored.probability`: the predicted probability of success for the observation*
+
+    *Use the table() function to get the raw confusion matrix for this scored dataset. Make sure you understand the output. In particular, do the rows represent the actual or predicted class? The columns?*
+
+    ```{r}
+    #| label: Confusion matrix
+    confusion_matrix <- table(classifications_output_data$class, classifications_output_data$scored.class)
+    confusion_matrix
+    ```
+
+    ```{r}
+    #| label: True negatives and false negatives
+    #| include: FALSE
+    tn <- confusion_matrix[1,1]
+    fn <- confusion_matrix[2,1]
+    ```
+
+    The rows represent the actual class (`class`) and the columns represent the predicted class (`scored.class`). For example, there are `r tn` observations where the actual class is 0 and the predicted class is also 0 (true negatives), and there are `r fn` observations where the actual class is 1 but the predicted class is 0 (false negatives).
+
+3.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.*
+
+    $$
+    𝐴𝑐𝑐𝑢𝑟𝑎𝑐𝑦 = \frac{𝑇𝑃 + 𝑇𝑁}{𝑇𝑃 + 𝐹𝑃 + 𝑇𝑁 + 𝐹𝑁}
+    $$
+
+    ```{r}
+    #| label: Accuracy function
+
+    calculate_accuracy <- function(data, actual_col, predicted_col) {
+      confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+      tp <- confusion_matrix[2, 2]
+      tn <- confusion_matrix[1, 1]
+      fp <- confusion_matrix[1, 2]
+      fn <- confusion_matrix[2, 1]
+      accuracy <- (tp + tn) / (tp + fp + tn + fn)
+      return(accuracy)
+    }
+
+    # Test function
+    calculate_accuracy(classifications_output_data, "class", "scored.class")
+    ```
+
+4.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.*
+
+    $$
+    𝐶𝑙𝑎𝑠𝑠𝑖𝑓𝑖𝑐𝑎𝑡𝑖𝑜𝑛 𝐸𝑟𝑟𝑜𝑟 𝑅𝑎𝑡𝑒 = \frac{𝐹𝑃 + 𝐹𝑁}{𝑇𝑃 + 𝐹𝑃 + 𝑇𝑁 + 𝐹𝑁}
+    $$
+
+    *Verify that you get an accuracy and an error rate that sums to one.*
+
+    ```{r}
+    
+    ```
+
+5.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.*
+
+    $$
+    𝑃𝑟𝑒𝑐𝑖𝑠𝑖𝑜𝑛 = \frac{𝑇𝑃}{𝑇𝑃 + 𝐹𝑃}
+    $$
+
+    ```{r}
+
+    ```
+
+6.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.*
+
+    $$
+    𝑆𝑒𝑛𝑠𝑖𝑡𝑖𝑣𝑖𝑡𝑦 = \frac{𝑇𝑃}{𝑇𝑃 + 𝐹𝑁}
+    $$
+
+    ```{r}
+
+    ```
+
+7.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.*
+
+    $$
+    𝑆𝑝𝑒𝑐𝑖𝑓𝑖𝑐𝑖𝑡𝑦 = \frac{𝑇𝑁}{𝑇𝑁 + 𝐹𝑃}
+    $$
+
+    ```{r}
+
+    ```
+
+8.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.*
+
+    $$
+    𝐹1 𝑆𝑐𝑜𝑟𝑒 = \frac{2 × 𝑃𝑟𝑒𝑐𝑖𝑠𝑖𝑜𝑛 × 𝑆𝑒𝑛𝑠𝑖𝑡𝑖𝑣𝑖𝑡𝑦}{𝑃𝑟𝑒𝑐𝑖𝑠𝑖𝑜𝑛 + 𝑆𝑒𝑛𝑠𝑖𝑡𝑖𝑣𝑖𝑡𝑦}
+    $$
+
+    ```{r}
+
+    ```
+
+9.  *Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. (Hint: If 0 \< 𝑎 \< 1 and 0 \< 𝑏 \< 1 then 𝑎𝑏 \< 𝑎.)*
+
+    ```{r}
+
+    ```
+
+10. *Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.*
+
+    ```{r}
+
+    ```
+
+11. *Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.*
+
+    ```{r}
+
+    ```
+
+12. *Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?*
+
+    ```{r}
+
+    ```
+
+13. *Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?*
+
+    ```{r}
+
+    ```
+
+# Classification Metrics
+
+*Upon following the instructions below, use your created R functions and the other packages to generate the classification metrics for the provided data set.*
+
+```{r}
+
+```
