@@ -45,8 +45,8 @@ We analyze and model data on a professional baseball team from 1871 to 2006. Eac
 #| include: false
 
 # Load the training and evaluation datasets
-moneyball_train <- read_csv("moneyball-training-data (1).csv")
-moneyball_eval <- read_csv("moneyball-evaluation-data (2).csv")
+moneyball_train <- read_csv("./data/moneyball-training-data (1).csv")
+moneyball_eval <- read_csv("./data/moneyball-evaluation-data (2).csv")
 
 # Count rows and columns
 nrows <- moneyball_train |> nrow()
@@ -163,6 +163,9 @@ To begin by remove variables with high missingness variables and low correlation
 # These variables lack a strong relationship with response variable TARGET_WINS
 moneyball_clean <- moneyball_train |>
   select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
+
+moneyball_eval_clean <- moneyball_eval |>
+  select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
 ```
 
 Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator is created to preserve information that the value was originally missing. Our indicator for each flag is (1 = missing, 0 = present)
@@ -172,6 +175,13 @@ Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PI
 #| echo: true
 #| warning: false
 moneyball_clean <- moneyball_clean |>
+  mutate(
+    TEAM_BASERUN_SB_MISSING  = as.integer(is.na(TEAM_BASERUN_SB)),
+    TEAM_BATTING_SO_MISSING  = as.integer(is.na(TEAM_BATTING_SO)),
+    TEAM_PITCHING_SO_MISSING = as.integer(is.na(TEAM_PITCHING_SO))
+  )
+
+moneyball_eval_clean <- moneyball_eval_clean |>
   mutate(
     TEAM_BASERUN_SB_MISSING  = as.integer(is.na(TEAM_BASERUN_SB)),
     TEAM_BATTING_SO_MISSING  = as.integer(is.na(TEAM_BATTING_SO)),
@@ -207,6 +217,28 @@ moneyball_clean <- moneyball_clean %>%
       TEAM_BATTING_SO
     )
   )
+
+moneyball_eval_clean <- moneyball_eval_clean %>%
+  mutate(
+    # Mean imputation for right-tailed variables
+    TEAM_BASERUN_SB = ifelse(
+      is.na(TEAM_BASERUN_SB),
+      mean(TEAM_BASERUN_SB, na.rm = TRUE),
+      TEAM_BASERUN_SB
+    ),
+    TEAM_PITCHING_SO = ifelse(
+      is.na(TEAM_PITCHING_SO),
+      mean(TEAM_PITCHING_SO, na.rm = TRUE),
+      TEAM_PITCHING_SO
+    ),
+
+    # Median imputation for bimodal variable
+    TEAM_BATTING_SO = ifelse(
+      is.na(TEAM_BATTING_SO),
+      median(TEAM_BATTING_SO, na.rm = TRUE),
+      TEAM_BATTING_SO
+    )
+   )
 ```
 
 When a distribution is observed to be skewed to the right, meaning small number of outliers has influence on the response variable `TARGET_WINS`, the log transformation can be applied to balance the scale of distribution. Utilizing log compresses the distribution of missing variable closer to symmetric shape. This makes the relationship with `TARGET_WINS` more linear and easier for the model to capture. `log1p` is used to handle any zero without producing undefined results.
@@ -218,6 +250,13 @@ When a distribution is observed to be skewed to the right, meaning small number 
 
 # Log transform right-skewed variables
 moneyball_clean <- moneyball_clean %>%
+  mutate(
+    LOG_TEAM_BASERUN_SB  = log1p(TEAM_BASERUN_SB),
+    LOG_TEAM_PITCHING_SO = log1p(TEAM_PITCHING_SO),
+    LOG_TEAM_FIELDING_E  = log1p(TEAM_FIELDING_E)
+  )
+
+moneyball_eval_clean <- moneyball_eval_clean %>%
   mutate(
     LOG_TEAM_BASERUN_SB  = log1p(TEAM_BASERUN_SB),
     LOG_TEAM_PITCHING_SO = log1p(TEAM_PITCHING_SO),
@@ -250,12 +289,25 @@ moneyball_clean <- moneyball_clean |>
                              TEAM_BATTING_BB / TEAM_BATTING_SO, NA)
   )
 
+moneyball_eval_clean <- moneyball_eval_clean |>
+  mutate(
+    HR_DIFFERENTIAL = TEAM_BATTING_HR - TEAM_PITCHING_HR,
+    BAT_BB_SO_RATIO = ifelse(TEAM_BATTING_SO > 0,
+                             TEAM_BATTING_BB / TEAM_BATTING_SO, NA)
+  )
+
 #  Impute missing values in BAT_BB_SO_RATIO with median
 moneyball_clean <- moneyball_clean |>
   mutate(
     BAT_BB_SO_RATIO = ifelse(is.na(BAT_BB_SO_RATIO),
                              median(BAT_BB_SO_RATIO, na.rm = TRUE), BAT_BB_SO_RATIO)
   )
+
+moneyball_eval_clean <- moneyball_eval_clean |>
+  mutate(
+    BAT_BB_SO_RATIO = ifelse(is.na(BAT_BB_SO_RATIO),
+                             median(BAT_BB_SO_RATIO, na.rm = TRUE), BAT_BB_SO_RATIO)
+   )
 ```
 
 Finally we can verify that there no missing variables that remain based on the results of our imputation
@@ -295,7 +347,7 @@ The last three will be evaluated after models are built (section 3). Here, we te
 
 ### Plot 1. Batting and baserun variables
 
--   In the first row, the correlation coefficients show that all batting and baserun variables except `TEAM_BATTING_SO` have significant correlations with the target variable.
+-   In the first row of @fig-correlation-matrix, the correlation coefficients show that all batting and baserun variables except `TEAM_BATTING_SO` have significant correlations with the target variable.
 
 -   In the first column, the scatterplots show that `TEAM_BATTING_H` and `TEAM_BATTING_2B` have the clearest linear relationship with `TARGET_WINS`.
 
@@ -373,171 +425,211 @@ The results above indicate that the assumption of linearity is satisfied for all
 
 ## Build Models
 
-*Using the training data set, build at least three different multiple linear regression models, using different variables (or the same variables with different transformations). Since we have not yet covered automated variable selection methods, you should select the variables manually (unless you previously learned Forward or Stepwise selection, etc.). Since you manually selected a variable for inclusion into the model or exclusion into the model, indicate why this was done. Discuss the coefficients in the models, do they make sense? For example, if a team hits a lot of Home Runs, it would be reasonably expected that such a team would win more games. However, if the coefficient is negative (suggesting that the team would lose more games), then that needs to be discussed. Are you keeping the model even though it is counter intuitive? Why? The boss needs to know.*
+First, we will split our dataset into a trianing and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
+
+```{r}
+#| label: split-data
+
+set.seed(19940211)
+train_indices <- sample(nrow(moneyball_clean), size = 0.8 * nrow(moneyball_clean))
+moneyball_train_split <- moneyball_clean[train_indices, ]
+moneyball_test_split <- moneyball_clean[-train_indices, ]
+```
+
+We will start by building three models. The first model contains all the variables in the cleaned training dataset. The second model  only includes the variables that are most correlated with the target variable and the two new predictors (`HR_DIFFERENTIAL` and `BAT_BB_SO_RATIO`). Finally, we'll create a third model using automated stepwise selection to identify the best subset of predictors. This method iteratively adds or removes predictors to find the model that best balances fit and complexity.
+
+We will compare the performance of these two models to determine whether including all variables improves performance compared to a model with just the most correlated variables. The stepwise selection model will help us identify whether there are any additional predictors that improve performance beyond the most correlated variables and the new predictors. We will evaluate the performance of these models in the next section to determine which one is best for predicting `TARGET_WINS`.
 
 ```{r}
 #| label: build-models
+
+# First model with all variables
+model_full <- lm(
+  TARGET_WINS ~ .,
+  data = moneyball_train_split |>
+    select(-INDEX)
+  )
+
+# Second model with most correlated variables and new predictors
+model_theory <- lm(
+  TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_BB + HR_DIFFERENTIAL + BAT_BB_SO_RATIO,
+    data = moneyball_train_split
+  )
+
+# A third model using Automated Stepwise Selection
+model_stepwise <- step(
+  model_full,
+  direction = "backward",
+  trace = 0
+)
 ```
+
+Prior to comparing the models, we wil lcheck the remaining assumptions of linear regression. Restating the assumptions:
+
+### 1.  The independent and dependent variables are linearly related.
+This was verified above during the data exploration phase using pair plots. The scatterplots in the pair plots showed that there were no obvious nonlinear relationships between the independent variables and the target variable `TARGET_WINS`. Therefore, the assumption of linearity is satisfied.
+
+### 2.  The errors are independent of each other.
+To check for independence of errors, we can plot the auto-correlations plots (ACF) of the residuals for each model. If there are significant autocorrelations at any lag, this suggests that the errors are not independent.
+
+```{r}
+#| label: check-independence
+#| fig-cap: ACF plots of residuals for each model
+
+par(mfrow = c(1, 3))
+acf(residuals(model_full), main="ACF: Full Model")
+acf(residuals(model_theory), main="ACF: Theory Model")
+acf(residuals(model_stepwise), main="ACF: Stepwise Model")
+```
+
+These ACF plots show that there are significant autocorrelations from lag 1 to lag 10 for all three models, which suggests that the errors are not independent. This may be due to the fact that the data is time series data, and there may be temporal dependencies in the errors. This would make sense as the performance of a baseball team in one year may be related to its performance in the previous year and this data is defined as "...[representing] a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season."
+
+### 3. The errors have constant variance (Homoscedasticity).
+To check for constant variance, we examine the Residuals vs Fitted plots and the Scale-Location plots for our models. We are looking for a relatively random scatter of points around the horizontal zero line. If the spread of the residuals increases or decreases systematically with the fitted values (forming a "megaphone" or "funnel" shape), it indicates heteroscedasticity.
+
+```{r}
+#| label: check-constant-variance
+#| fig-cap: "Residuals vs Fitted and Scale-Location plots for each model"
+
+# Set up a 2x3 grid for the plots
+par(mfrow = c(2, 3))
+
+# Row 1: Residuals vs Fitted
+plot(model_full, which = 1, main = "Resid vs Fitted (Full)")
+plot(model_theory, which = 1, main = "Resid vs Fitted (Theory)")
+plot(model_stepwise, which = 1, main = "Resid vs Fitted (Step)")
+
+# Row 2: Scale-Location
+plot(model_full, which = 3, main = "Scale-Location (Full)")
+plot(model_theory, which = 3, main = "Scale-Location (Theory)")
+plot(model_stepwise, which = 3, main = "Scale-Location (Step)")
+```
+
+The residuals vs fitted plots across all three models show that the residuals are randomly scattered around the horizontal zero line, which is evidence that the model adheres to the assumption of homoscedasticity. The scale-location plots show a slightly different story where theres a consistant 'U' or 'V' shape with the red line indicating that the variance of the residuals is not constant across the range of fitted values. This suggests that there may be some heteroscedasticity in the models, which could affect the reliability of the standard errors and confidence intervals.
+
+### 4. The errors are normally distributed.
+
+To verify that our residuals follow a normal distribution, we use Normal Q-Q plots. If the assumption holds then the standardized residuals should be in a diagonal line. Deviations at the lower or upper tails suggest skewed or heavy-tailed errors. We will also perform a Shapiro-Wilk statistical test to quantitatively assess normality, where a p-value < 0.05 indicates a significant departure from a normal distribution.
+
+```{r}
+#| label: check-normality
+#| fig-cap: "Normal Q-Q plots for checking normality of errors"
+
+# Set up a 1x3 grid for the plots
+par(mfrow = c(1, 3))
+plot(model_full, which = 2, main = "Normal Q-Q (Full)")
+plot(model_theory, which = 2, main = "Normal Q-Q (Theory)")
+plot(model_stepwise, which = 2, main = "Normal Q-Q (Step)")
+
+# Formal Shapiro-Wilk Test (Note: p-value < 0.05 means NOT normal)
+shapiro.test(residuals(model_full))
+shapiro.test(residuals(model_theory))
+shapiro.test(residuals(model_stepwise))
+```
+
+For all 3 models the points follow the diagonal line reasonably well in the middle of the distribution but the upper tail curves upwards and the lower tail curves downwards. This suggests that the residuals have heavier tails than a normal distribution, which may indicate the presence of outliers or a non-normal error distribution.
+
+From the Shapiro-Wilk tests, we find that the p-values for all three models are much less than 0.05 which indicates that the residuals significantly deviate from a normal distribution. This is consistent with the observations from the Q-Q plots and suggests that the assumption of normality is violated for all three models. This violation is likely due to the presence of outliers or a heavy-tailed error distribution and we can likly continue with the models but we should be cautious when interpreting the results.
 
 ## Select Models
 
-*Decide on the criteria for selecting the best multiple linear regression model. Will you select a model with slightly worse performance if it makes more sense or is more parsimonious? Discuss why you selected your model. For the multiple linear regression model, will you use a metric such as Adjusted R2 , RMSE, etc.? Be sure to explain how you can make inferences from the model, discuss multi-collinearity issues (if any), and discuss other relevant model output. Using the training data set, evaluate the multiple linear regression model based on (a) mean squared error, (b) R2 , (c) F-statistic, and (d) residual plots. Make predictions using the evaluation data set.*
+```{r}
+#| label: model-comparison-table
+#| echo: false
+#| results: asis
+
+# Creating a custom helper function to extract all the required metrics 
+# explicitly evaluating on the provided training dataset.
+get_model_metrics <- function(model, model_name, train_data) {
+  mod_summary <- summary(model)
+  
+  # Explicitly calculate Mean Squared Error (MSE) using the training data
+  predictions <- predict(model, newdata = train_data)
+  mse <- mean((train_data$TARGET_WINS - predictions)^2)
+  
+  # Extract F-statistic and calculate its p-value (inherent to training data)
+  f_stat <- mod_summary$fstatistic
+  p_val <- if (!is.null(f_stat)) {
+    pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = FALSE)
+  } else {
+    NA
+  }
+  
+  # Return a nicely formatted row for our table
+  tibble(
+    Model = model_name,
+    `Training MSE` = mse,
+    `R-Squared` = mod_summary$r.squared,
+    `Adj R-Squared` = mod_summary$adj.r.squared,
+    `F-Statistic` = f_stat[1],
+    `P-Value` = p_val,
+    `AIC` = AIC(model),
+    `BIC` = BIC(model)
+  )
+}
+
+# Apply the function to all three models, explicitly passing the training split
+model_comparison <- bind_rows(
+  get_model_metrics(model_full, "Full Model", moneyball_train_split),
+  get_model_metrics(model_theory, "Theory Model", moneyball_train_split),
+  get_model_metrics(model_stepwise, "Stepwise Model", moneyball_train_split)
+) |>
+  # Sort by the lowest Training MSE 
+  arrange(`Training MSE`)
+
+# Display the table
+knitr::kable(
+  model_comparison, 
+  digits = 4, 
+  caption = "Evaluation of Candidate Models on Training Dataset"
+)
+```
+
+We favor a slightly more parsimonious model over a complex one with a marginally better R2. A simpler model (like our Stepwise or Theory model) is easier to interpret and less prone to overfitting. We will evaluate the models using Adjusted `R^2` and MSE on the training data, and then use the evaluation dataset to compare their predictive performance.
+
+Looking at the table above, we can see that the Stepwise and Full models have similar MSE and Adjusted `R^2`, but the Stepwise model has fewer predictors making it a bit more parsimonious. Additionally, the Stepwise model is more interpretable and less prone to overfitting than the Full model. Additonally, the theory model has a much higher MSE and lower Adjusted `R^2` than the other two models, which suggests that baseball is more comoplex to predict wins with just the most correlated variables and the two new predictors. Therefore, we select the Stepwise model as our final model for predicting `TARGET_WINS`. 
+
+Regarding the F-statistic, the highly significant p-value for the stepwise model's F-statistic (119.9) confirms that our selected group of predictors is collectively highly effective at explaining the variance in total team wins.
+
+```{r}
+# | label: stepwise-model-summary
+# | echo: true
+# Display the summary of the selected Stepwise model to interpret coefficients and significance
+summary(model_stepwise)
+```
+
+To make inferences from our Stepwise model, we can interpret the coefficients. For example, the coefficient for `TEAM_BATTING_H` is 0.05 which indicates that, all other things being equal, for every additional 20 hits a team records over a season they're expected to gain about 1 additional win. Similarly, `TEAM_BATTING_BB` (aka walks) has a positive highly significant coefficient (0.03) which aligns with baseball theory that teams that walk more tend to win more.
 
 # Results
 
-We predict that...
+```{r}
+#| label: predictions-on-eval-set
+#| echo: true
+# Generate predictions on the evaluation dataset using the selected model
+eval_predictions <- predict(model_stepwise, newdata = moneyball_eval_clean)
+
+# Bind the predictions back to the evaluation dataset for easy viewing
+moneyball_eval_results <- moneyball_eval_clean |>
+  # We round the predictions to the nearest whole number because a team 
+  # can't win a fraction of a baseball game
+  mutate(PREDICTED_TARGET_WINS = round(eval_predictions, 0)) |>
+  # Move the new prediction column to the front (right after INDEX) for easy reading
+  relocate(PREDICTED_TARGET_WINS, .after = INDEX)
+
+# Write predictions to a csv
+write_csv(moneyball_eval_results, "moneyball_evaluation_predictions.csv")
+
+# Display the first 10 predictions in the rendered PDF
+knitr::kable(
+  head(moneyball_eval_results |> select(INDEX, PREDICTED_TARGET_WINS), 10),
+  caption = "Stepwise Model Win Predictions for Evaluation Set"
+)
+```
+
+Given our evaluation set and our stepwise model, we are able to create predictions for the number of wins for the team in each year. The first 10 predictions are shown in the table above. We will write these predictions to a csv file for submission.
 
 # Conclusion
 
 In conclusion...
 
 # Appendix: R Code
-
-## 1. Data Exploration
-
-First, we preview the data.
-
-```{r}
-#| label: preview-data
-
-moneyball_train |> head()
-```
-
-The data are all numeric, and the target variable is `TARGET_WINS`, which represents the number of wins for the team in that season. The other variables represent various performance statistics for the team.
-
-We also check summary statistics for all variables in our training data, including checking missingness.
-
-```{r}
-#| label: summary-statistics
-
-moneyball_train |> skim()
-
-nrows <- moneyball_train |> nrow()
-ncols <- moneyball_train |> length()
-perc_complete <- round(moneyball_train |> n_complete() / nrows / ncols * 100, 2)
-```
-
-This training dataset contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The variables with missingness are:
-
-```{r}
-#| label: summarize-missingness
-
-moneyball_train |>
-    summarise(across(everything(), ~ sum(is.na(.)) / nrows * 100)) |>
-    pivot_longer(everything(), names_to = "variable", values_to = "missing_percentage") |>
-    arrange(desc(missing_percentage)) |>
-    filter(missing_percentage > 0)
-```
-
-This missingness will need to be addressed in the data preparation step.
-
-We also visualize correlations between all variables.
-
-```{r}
-#| label: visualize-correlations
-
-moneyball_train_cor <- moneyball_train |>
-    cor(use = "pairwise.complete.obs")
-
-corrplot(moneyball_train_cor, method = "circle", type = "upper", tl.cex = 0.7, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = 0.7)
-```
-
-The most correlated variables with the target variable `TARGET_WINS` are:
-
-```{r}
-#| label: most-correlated-variables
-
-moneyball_train_cor |>
-    as.data.frame() |>
-    rownames_to_column(var = "variable") |>
-    select(variable, TARGET_WINS) |>
-    filter(variable != "TARGET_WINS") |>
-    arrange(desc(abs(TARGET_WINS))) |>
-    head(10)
-```
-
-These may be strong predictors of wins.
-
-The most correlated independent variables are:
-
-```{r}
-#| label: most-autocorrelated-variables
-
-moneyball_train_cor |>
-    as.data.frame() |>
-    rownames_to_column(var = "variable1") |>
-    pivot_longer(-variable1, names_to = "variable2", values_to = "correlation") |>
-    filter(variable1 != variable2) |>
-    distinct(across(c(correlation)), .keep_all = TRUE) |>
-    arrange(desc(abs(correlation))) |>
-    head(20)
-```
-
-It makes sense that homeruns by batters (`TEAM_BATTING_HR`) and homeruns allowed (`TEAM_PITCHING_HR`) are correlated, as teams that hit many homeruns may also allow many homeruns, for example. We may need to avoid including these pairs of variables in the same model to prevent multicollinearity.
-
-We also visualize the distribution of z-scores of all variable observations, and identify outliers in the training data.
-
-```{r}
-#| label: box-plots
-#| fig-cap: "Box plots for identifying outliers in the training data"
-#| fig.align: "center"
-
-moneyball_train |>
-    pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") |>
-    group_by(Variable) |>
-    mutate(Z_Score = scale(Value)[,1]) |>
-    ungroup() |>
-    ggplot(aes(x = Z_Score, y = Variable)) +
-    geom_boxplot() +
-    theme_minimal() +
-    theme(panel.grid = element_blank(), axis.text.y = element_text(angle = 0)) +
-    xlab("Z-Score")
-```
-
-We also visualize the distribution of all variables.
-
-```{r}
-#| label: visualize-distributions
-#| warning: false
-
-# Loop through all variables and create histograms
-for (var in names(moneyball_train)) {
-    p <- ggplot(moneyball_train, aes_string(x = var)) +
-        geom_histogram() +
-        labs(title = paste("Distribution of", var), x = var, y = "Frequency") +
-        theme_minimal() +
-        theme(panel.grid = element_blank())
-    print(p)
-}
-```
-
-## 2. Data Preparation
-
-Next, we will prepare the data for modeling.
-
-First, we handle missing data. Since we saw in the EDA that `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` were 91.6%, 33.9%, and 12.6% missing, respectively, and not very correlated with the target variable, so we will drop these variables. The remaining variables are less than 10% missing, so we will impute the missing values with the median of each variable. `TEAM_BASERUN_SB` is the most correlated variable with the target variable that has missingness, so we will be sure to impute this variable rather than drop it.
-
-The median imputation was picked based on the distributions of the variables with missingness: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. `TEAM_BATTING_SO` is bimodal, so the median is also a better imputation method than the mean for this variable. See the histograms above for the distributions of these variables.
-
-```{r}
-#| label: remove_missing_impute
-moneyball_train_prepared <- moneyball_train |>
-    select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP) |>
-    mutate(across(everything(), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
-```
-
-## 3. Build Models
-
-```{r}
-```
-
-## 4. Select Models
-
-```{r}
-```
-
-Export assigned predictions (the number of wins for the team) for the evaluation data set for deliverable.
-
-```{r}
-#| label: export-predictions
-```
