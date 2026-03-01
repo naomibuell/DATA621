@@ -63,7 +63,7 @@ The moneyball training data set contains `r nrows` rows and `r ncols` features, 
 ```{r}
 #| label: tbl-summary-statistics
 #| tbl-cap: "Summary statistics for all variables in the training dataset"
-#| echo: false
+#| echo: true
 
 tbl_summ_stats <- moneyball_train |> skim_without_charts() |> janitor::clean_names() |> as_tibble() |>
     rename(Variable = skim_variable, "Completeness rate" = complete_rate, "Mean" = numeric_mean, "SD" = numeric_sd, "P50" = numeric_p50, "Min" = numeric_p0, "P25" = numeric_p25, "P75" = numeric_p75, "Max" = numeric_p100) |>
@@ -79,7 +79,7 @@ tbl_summ_stats
 #| label: fig-correlation-matrix
 #| fig-cap: "Correlation matrix of all variables in the training dataset"
 #| fig.align: "center"
-#| echo: false
+#| echo: true
 #| warning: false
 
 # Get correlation matrix
@@ -97,7 +97,7 @@ The correlation between all variables are shown @fig-correlation-matrix. The mos
 #| label: fig-box-plots
 #| fig-cap: "Box plots for identifying outliers in the training data"
 #| fig.align: "center"
-#| echo: false
+#| echo: true
 #| warning: false
 
 moneyball_train |>
@@ -122,7 +122,7 @@ The median imputation was picked based on the distributions of missing variables
 #| label: histograms-missing-variables
 #| fig-cap: "Histograms of variables with missingness selected for imputation"
 #| warning: false
-#| echo: false
+#| echo: true
 
 # Create density curve for TEAM_BASERUN_SB
 p1 <- ggplot(moneyball_train, aes(x = TEAM_BASERUN_SB)) +
@@ -168,7 +168,7 @@ moneyball_eval_clean <- moneyball_eval |>
   select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
 ```
 
-Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator is created to preserve information that the value was originally missing. Our indicator for each flag is (1 = missing, 0 = present)
+Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator is created to preserve information that the value was originally missing. Our indicator for each flag is (1 = missing, 0 = present).
 
 ```{r}
 #| label: missingness flags indicator
@@ -189,7 +189,7 @@ moneyball_eval_clean <- moneyball_eval_clean |>
   )
 ```
 
-Imputation is now based on the distribution of missing data of the following variables. `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO` , and `TEAM_BATTING_SO`. `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are right skewed, therefore they are imputed around the mean. `TEAM_BATTING_SO` is bimodal, so we can impute around the median to avoid placing the imputed values in region between two peaks where only a few observations exist.
+Imputation is now based on the distribution of missing data of the following variables. `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO`, and `TEAM_BATTING_SO`. `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are right skewed, therefore they are imputed around the mean. `TEAM_BATTING_SO` is bimodal, so we can impute around the median to avoid placing the imputed values in region between two peaks where only a few observations exist.
 
 ```{r}
 #| label: imputation
@@ -310,15 +310,10 @@ moneyball_eval_clean <- moneyball_eval_clean |>
    )
 ```
 
-Finally we can verify that there no missing variables that remain based on the results of our imputation
-
-::: callout-note
-Comment from Alex: I tweaked the block below. The original code results in a blank output. While technically correct, it could make the prof wonder whether the code runs correctly. It'd be better to show some type of output, eg zero variables have missingness.
-:::
+Finally we can verify that there no missing variables that remain based on the results of our imputation.
 
 ```{r}
 #| label: tbl-verify-imputation
-#| tbl-cap: "Remaining missing values after imputation"
 #| echo: true
 #| warning: false
 
@@ -330,11 +325,9 @@ moneyball_clean |>
                       values_to = "Missing") |>
   filter(Missing > 0) |>
   nrow()
-  # knitr::kable()
-
 ```
 
-## Assumptions for Linear Regression
+## Verifying Linearity Assumption
 
 Linear regression makes four important assumptions:
 
@@ -345,7 +338,7 @@ Linear regression makes four important assumptions:
 
 The last three will be evaluated after models are built (section 3). Here, we test the assumption of linearity using pair plots of the variables in the cleaned training dataset. To avoid overcrowded plots, we divided the variables into three groups.
 
-### Plot 1. Batting and baserun variables
+### Batting and baserun variables
 
 -   In the first row of @fig-correlation-matrix, the correlation coefficients show that all batting and baserun variables except `TEAM_BATTING_SO` have significant correlations with the target variable.
 
@@ -369,11 +362,11 @@ moneyball_clean |>
     )
 ```
 
-### Plot 2. Pitching and fielding variables
+### Pitching and fielding variables
 
 -   In the first row, the correlation coefficients show that all pitching variables and the fielding variable have significant correlations with the target variable.
 
--   In the first column, the scatterplots show that T`EAM_PITCHING_BB` has the clearest linear relationship with `TARGET_WINS`.
+-   In the first column, the scatterplots show that `TEAM_PITCHING_BB` has the clearest linear relationship with `TARGET_WINS`.
 
     -   Two independent variables (`TEAM_PITCHING_H` and `TEAM_PITCHING_SO`) appear to be related by a horizontal line. Technically, this satisfies the assumption of linearity, but it suggests that these variables do not have predictive value.
 
@@ -394,7 +387,7 @@ moneyball_clean |>
     )    
 ```
 
-### Plot 3. New variables
+### New variables
 
 -   In the first row, the correlation coefficients show that four of the five newly created variables have significant correlations with the target variable. The exception was `LOG_TEAM_PITCHING_SO`, which had a correlation coefficient of 0.003.
 
@@ -419,7 +412,7 @@ moneyball_clean |>
     )
 ```
 
-### Conclusions
+### Linearity Assumption Summary
 
 The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
 
@@ -464,12 +457,14 @@ model_stepwise <- step(
 )
 ```
 
-Prior to comparing the models, we wil lcheck the remaining assumptions of linear regression. Restating the assumptions:
+### Verifying Remaining Assumptions for Linear Regression
 
-### 1.  The independent and dependent variables are linearly related.
+Prior to comparing the models, we will check the remaining assumptions of linear regression. Restating the assumptions:
+
+#### The independent and dependent variables are linearly related.
 This was verified above during the data exploration phase using pair plots. The scatterplots in the pair plots showed that there were no obvious nonlinear relationships between the independent variables and the target variable `TARGET_WINS`. Therefore, the assumption of linearity is satisfied.
 
-### 2.  The errors are independent of each other.
+#### The errors are independent of each other.
 To check for independence of errors, we can plot the auto-correlations plots (ACF) of the residuals for each model. If there are significant autocorrelations at any lag, this suggests that the errors are not independent.
 
 ```{r}
@@ -482,9 +477,9 @@ acf(residuals(model_theory), main="ACF: Theory Model")
 acf(residuals(model_stepwise), main="ACF: Stepwise Model")
 ```
 
-These ACF plots show that there are significant autocorrelations from lag 1 to lag 10 for all three models, which suggests that the errors are not independent. This may be due to the fact that the data is time series data, and there may be temporal dependencies in the errors. This would make sense as the performance of a baseball team in one year may be related to its performance in the previous year and this data is defined as "...[representing] a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season."
+These ACF plots show that there are just a few significant autocorrelations from lag 1 to lag 10 for all three models, which suggests that the errors are not independent. This may be due to the fact that the data is time series data, and there may be temporal dependencies in the errors. This would make sense as the performance of a baseball team in one year may be related to its performance in the previous year and this data is defined as "...[representing] a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season."
 
-### 3. The errors have constant variance (Homoscedasticity).
+#### The errors have constant variance (Homoscedasticity).
 To check for constant variance, we examine the Residuals vs Fitted plots and the Scale-Location plots for our models. We are looking for a relatively random scatter of points around the horizontal zero line. If the spread of the residuals increases or decreases systematically with the fitted values (forming a "megaphone" or "funnel" shape), it indicates heteroscedasticity.
 
 ```{r}
@@ -507,7 +502,7 @@ plot(model_stepwise, which = 3, main = "Scale-Location (Step)")
 
 The residuals vs fitted plots across all three models show that the residuals are randomly scattered around the horizontal zero line, which is evidence that the model adheres to the assumption of homoscedasticity. The scale-location plots show a slightly different story where theres a consistant 'U' or 'V' shape with the red line indicating that the variance of the residuals is not constant across the range of fitted values. This suggests that there may be some heteroscedasticity in the models, which could affect the reliability of the standard errors and confidence intervals.
 
-### 4. The errors are normally distributed.
+#### The errors are normally distributed.
 
 To verify that our residuals follow a normal distribution, we use Normal Q-Q plots. If the assumption holds then the standardized residuals should be in a diagonal line. Deviations at the lower or upper tails suggest skewed or heavy-tailed errors. We will also perform a Shapiro-Wilk statistical test to quantitatively assess normality, where a p-value < 0.05 indicates a significant departure from a normal distribution.
 
@@ -535,7 +530,7 @@ From the Shapiro-Wilk tests, we find that the p-values for all three models are 
 
 ```{r}
 #| label: model-comparison-table
-#| echo: false
+#| echo: true
 #| results: asis
 
 # Creating a custom helper function to extract all the required metrics 
@@ -587,7 +582,7 @@ knitr::kable(
 
 We favor a slightly more parsimonious model over a complex one with a marginally better R2. A simpler model (like our Stepwise or Theory model) is easier to interpret and less prone to overfitting. We will evaluate the models using Adjusted `R^2` and MSE on the training data, and then use the evaluation dataset to compare their predictive performance.
 
-Looking at the table above, we can see that the Stepwise and Full models have similar MSE and Adjusted `R^2`, but the Stepwise model has fewer predictors making it a bit more parsimonious. Additionally, the Stepwise model is more interpretable and less prone to overfitting than the Full model. Additonally, the theory model has a much higher MSE and lower Adjusted `R^2` than the other two models, which suggests that baseball is more comoplex to predict wins with just the most correlated variables and the two new predictors. Therefore, we select the Stepwise model as our final model for predicting `TARGET_WINS`. 
+Looking at the table above, we can see that the Stepwise and Full models have similar MSE and Adjusted `R^2`, but the Stepwise model has fewer predictors making it a bit more parsimonious. Additionally, the Stepwise model is more interpretable and less prone to overfitting than the Full model. Additonally, the theory model has a much higher MSE and lower Adjusted `R^2` than the other two models, which suggests that baseball is more comoplex to predict wins with just the most correlated variables and the two new predictors. Therefore, **we select the Stepwise model as our final model for predicting `TARGET_WINS`**. 
 
 Regarding the F-statistic, the highly significant p-value for the stepwise model's F-statistic (119.9) confirms that our selected group of predictors is collectively highly effective at explaining the variance in total team wins.
 
@@ -598,7 +593,7 @@ Regarding the F-statistic, the highly significant p-value for the stepwise model
 summary(model_stepwise)
 ```
 
-To make inferences from our Stepwise model, we can interpret the coefficients. For example, the coefficient for `TEAM_BATTING_H` is 0.05 which indicates that, all other things being equal, for every additional 20 hits a team records over a season they're expected to gain about 1 additional win. Similarly, `TEAM_BATTING_BB` (aka walks) has a positive highly significant coefficient (0.03) which aligns with baseball theory that teams that walk more tend to win more.
+To make inferences from our Stepwise model, we can interpret the coefficients. For example, the coefficient for `TEAM_BATTING_H` is 0.05 which indicates that, all other things being equal, for every additional 20 hits a team records over a season, they're expected to gain about 1 additional win. Similarly, `TEAM_BATTING_BB` (i.e., walks) has a positive highly significant coefficient (0.03) which aligns with baseball theory that teams that walk more tend to win more.
 
 # Results
 
@@ -622,14 +617,12 @@ write_csv(moneyball_eval_results, "moneyball_evaluation_predictions.csv")
 # Display the first 10 predictions in the rendered PDF
 knitr::kable(
   head(moneyball_eval_results |> select(INDEX, PREDICTED_TARGET_WINS), 10),
-  caption = "Stepwise Model Win Predictions for Evaluation Set"
+  caption = "Excerpts of Stepwise Model Win Predictions for Evaluation Set"
 )
 ```
 
-Given our evaluation set and our stepwise model, we are able to create predictions for the number of wins for the team in each year. The first 10 predictions are shown in the table above. We will write these predictions to a csv file for submission.
+Given our evaluation set and our stepwise model, we are able to create predictions for the number of wins for the team in each year. The first 10 predictions are shown in the table above. We write these predictions to a CSV file for submission.
 
 # Conclusion
 
-In conclusion...
-
-# Appendix: R Code
+In conclusion, our stepwise model performed best in predicting the number of baseball wins based on the training data. Since there were some minor violations of assumptions, these results should be interpreted with caution, which may affect the reliability of our model. Future work could explore data transformations or alternative modeling approaches to address these assumption violations and potentially improve predictive performance.
