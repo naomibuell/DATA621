@@ -25,7 +25,7 @@ header-includes:
 
 ```{r}
 #| label: Load necessary libraries
-#| include: FALSE
+#| include: TRUE
 library(tidyverse)
 library(skimr)
 library(corrplot)
@@ -57,15 +57,18 @@ library(janitor)
 
     ```{r}
     #| label: Confusion matrix
-    confusion_matrix <- table(classifications_output_data$class, classifications_output_data$scored.class)
+    confusion_matrix <- table(
+    classifications_output_data$class,
+    classifications_output_data$scored.class
+    )
     confusion_matrix
     ```
 
     ```{r}
     #| label: True negatives and false negatives
-    #| include: FALSE
-    tn <- confusion_matrix[1,1]
-    fn <- confusion_matrix[2,1]
+    #| include: TRUE
+    tn <- confusion_matrix[1, 1]
+    fn <- confusion_matrix[2, 1]
     ```
 
     The rows represent the actual class (`class`) and the columns represent the predicted class (`scored.class`). For example, there are `r tn` observations where the actual class is 0 and the predicted class is also 0 (true negatives), and there are `r fn` observations where the actual class is 1 but the predicted class is 0 (false negatives).
@@ -80,13 +83,13 @@ library(janitor)
     #| label: Accuracy function
 
     calculate_accuracy <- function(data, actual_col, predicted_col) {
-      confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
-      tp <- confusion_matrix[2, 2]
-      tn <- confusion_matrix[1, 1]
-      fp <- confusion_matrix[1, 2]
-      fn <- confusion_matrix[2, 1]
-      accuracy <- (tp + tn) / (tp + fp + tn + fn)
-      return(accuracy)
+    confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+    tp <- confusion_matrix[2, 2]
+    tn <- confusion_matrix[1, 1]
+    fp <- confusion_matrix[1, 2]
+    fn <- confusion_matrix[2, 1]
+    accuracy <- (tp + tn) / (tp + fp + tn + fn)
+    return(accuracy)
     }
 
     # Test function
@@ -102,7 +105,7 @@ library(janitor)
     *Verify that you get an accuracy and an error rate that sums to one.*
 
     ```{r}
-    
+
     ```
 
 5.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.*
