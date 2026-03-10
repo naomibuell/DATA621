@@ -8,7 +8,7 @@ author:
   - name: Alexander Simon
   - name: Nana Frimpong 
   - name: Said Naqwe
-date: March 22, 2026
+date: March 22, 2026fi
 documentclass: article
 classoption: 11pt
 geometry:
@@ -26,6 +26,7 @@ header-includes:
 ```{r}
 #| label: Load necessary libraries
 #| include: TRUE
+#| warning: FALSE
 library(tidyverse)
 library(skimr)
 library(corrplot)
@@ -69,6 +70,10 @@ library(janitor)
     #| include: TRUE
     tn <- confusion_matrix[1, 1]
     fn <- confusion_matrix[2, 1]
+    
+    # print
+    print(paste("True Negatives:", tn))
+    print(paste("False Negatives:", fn))
     ```
 
     The rows represent the actual class (`class`) and the columns represent the predicted class (`scored.class`). For example, there are `r tn` observations where the actual class is 0 and the predicted class is also 0 (true negatives), and there are `r fn` observations where the actual class is 1 but the predicted class is 0 (false negatives).
@@ -93,7 +98,8 @@ library(janitor)
     }
 
     # Test function
-    calculate_accuracy(classifications_output_data, "class", "scored.class")
+    accuracy <- calculate_accuracy(classifications_output_data, "class", "scored.class")
+    print(paste("Accuracy:", accuracy))
     ```
 
 4.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.*
@@ -105,7 +111,22 @@ library(janitor)
     *Verify that you get an accuracy and an error rate that sums to one.*
 
     ```{r}
+    calculate_error_rate <- function(data, actual_col, predicted_col) {
+    confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+    tp <- confusion_matrix[2, 2]
+    tn <- confusion_matrix[1, 1]
+    fp <- confusion_matrix[1, 2]
+    fn <- confusion_matrix[2, 1]
+    error_rate <- (fp + fn) / (tp + fp + tn + fn)
+    return(error_rate)
+    }
 
+    # Test function
+    error_rate <- calculate_error_rate(classifications_output_data, "class", "scored.class")
+    print(paste("Error Rate:", error_rate))
+
+    # Verify that accuracy and error rate sum to 1
+    print(paste("Sum of accuracy + error rate:", accuracy + error_rate))
     ```
 
 5.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.*
@@ -135,7 +156,19 @@ library(janitor)
     $$
 
     ```{r}
+    calculate_specificity <- function(data, actual_col, predicted_col) {
+    confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+    tp <- confusion_matrix[2, 2]
+    tn <- confusion_matrix[1, 1]
+    fp <- confusion_matrix[1, 2]
+    fn <- confusion_matrix[2, 1]
+    specificity <- tn / (tn + fp)
+    return(specificity)
+    }
 
+    # Test function
+    specificity <- calculate_specificity(classifications_output_data, "class", "scored.class")
+    print(paste("Specificity:", specificity))
     ```
 
 8.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.*
