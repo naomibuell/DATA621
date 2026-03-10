@@ -210,11 +210,3 @@ library(janitor)
     ```{r}
 
     ```
-
-# Classification Metrics
-
-*Upon following the instructions below, use your created R functions and the other packages to generate the classification metrics for the provided data set.*
-
-```{r}
-
-```
