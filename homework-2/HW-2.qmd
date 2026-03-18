@@ -263,12 +263,52 @@ print(paste("Example F1 Score:", f1_test))
 12. *Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?*
 
     ```{r}
+    #| label: Question 12 - caret package
 
+    # Load caret package
+    library(caret)
+
+    # Create confusion matrix using caret
+    cm_caret <- confusionMatrix(as.factor(classifications_output_data$scored.class), 
+                                as.factor(classifications_output_data$class))
+
+    print(cm_caret)
+
+    # Extract metrics from caret
+    caret_accuracy <- cm_caret$overall['Accuracy']
+    caret_sensitivity <- cm_caret$byClass['Sensitivity']
+    caret_specificity <- cm_caret$byClass['Specificity']
+
+    print(paste("Caret Accuracy:", caret_accuracy))
+    print(paste("Caret Sensitivity:", caret_sensitivity))
+    print(paste("Caret Specificity:", caret_specificity))
+
+    # Compare with our functions
+    print("Comparison:")
+    print(paste("Accuracy - Ours:", accuracy, "Caret:", caret_accuracy))
+    print(paste("Sensitivity - Ours:", sensitivity, "Caret:", caret_sensitivity))
+    print(paste("Specificity - Ours:", specificity, "Caret:", caret_specificity))
     ```
 
 13. *Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?*
 
     ```{r}
+    #| label: Question 13 - pROC package
+    
+    # Load pROC package
+    library(pROC)
 
+    # Generate ROC curve using pROC
+    roc_obj <- roc(classifications_output_data$class, classifications_output_data$scored.probability)
 
+    # Plot the ROC curve
+    plot(roc_obj, main = "ROC Curve using pROC")
+
+    # Get AUC
+    auc_proc <- auc(roc_obj)
+    print(paste("AUC from pROC:", auc_proc))
+
+    # Compare with our custom function (assuming roc_result$auc is available from section 10)
+    print("Comparison:")
+    print(paste("Custom AUC:", roc_result$auc, "pROC AUC:", auc_proc))
     ```
