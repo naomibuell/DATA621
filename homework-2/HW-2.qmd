@@ -257,7 +257,27 @@ print(paste("Example F1 Score:", f1_test))
 11. *Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.*
 
     ```{r}
+# Question 11: Produce all classification metrics
 
+cat("=== Classification Metrics ===\n\n")
+
+accuracy <- calculate_accuracy(classifications_output_data, "class", "scored.class")
+cat(paste("Accuracy:          ", round(accuracy, 4), "\n"))
+
+error_rate <- calculate_error_rate(classifications_output_data, "class", "scored.class")
+cat(paste("Error Rate:        ", round(error_rate, 4), "\n"))
+
+precision <- calculate_precision(classifications_output_data, "class", "scored.class")
+cat(paste("Precision:         ", round(precision, 4), "\n"))
+
+sensitivity <- calculate_sensitivity(classifications_output_data, "class", "scored.class")
+cat(paste("Sensitivity:       ", round(sensitivity, 4), "\n"))
+
+specificity <- calculate_specificity(classifications_output_data, "class", "scored.class")
+cat(paste("Specificity:       ", round(specificity, 4), "\n"))
+
+f1_score <- calculate_f1(classifications_output_data, "class", "scored.class")
+cat(paste("F1 Score:          ", round(f1_score, 4), "\n"))
     ```
 
 12. *Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?*
