@@ -23,17 +23,17 @@ header-includes:
   - \setcounter{secnumdepth}{7}
 ---
 
-```{r}
-#| label: Load necessary libraries
-#| include: TRUE
-#| warning: FALSE
-library(tidyverse)
-library(skimr)
-library(corrplot)
-library(ggplot2)
-library(GGally)
-library(janitor)
-```
+    ```{r}
+    #| label: Load necessary libraries
+    #| include: TRUE
+    #| warning: FALSE
+    library(tidyverse)
+    library(skimr)
+    library(corrplot)
+    library(ggplot2)
+    library(GGally)
+    library(janitor)
+    ```
 
 # Homework Solutions
 
@@ -137,24 +137,24 @@ library(janitor)
 
     ```{r}
 
-# Precision function
+    # Precision function
 
-calculate_precision <- function(data, actual_col, predicted_col) {
-  confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
-  
-  tp <- confusion_matrix[2, 2]
-  tn <- confusion_matrix[1, 1]
-  fp <- confusion_matrix[1, 2]
-  fn <- confusion_matrix[2, 1]
-  
-  precision <- tp / (tp + fp)
-  
-  return(precision)
-}
+    calculate_precision <- function(data, actual_col, predicted_col) {
+    confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+    
+    tp <- confusion_matrix[2, 2]
+    tn <- confusion_matrix[1, 1]
+    fp <- confusion_matrix[1, 2]
+    fn <- confusion_matrix[2, 1]
+    
+    precision <- tp / (tp + fp)
+    
+    return(precision)
+    }
 
-# Test function
-precision <- calculate_precision(classifications_output_data, "class", "scored.class")
-print(paste("Precision:", precision))
+    # Test function
+    precision <- calculate_precision(classifications_output_data, "class", "scored.class")
+    print(paste("Precision:", precision))
     ```
 
 6.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.*
@@ -165,24 +165,24 @@ print(paste("Precision:", precision))
 
     ```{r}
 
-# Sensitivity function
+    # Sensitivity function
 
-calculate_sensitivity <- function(data, actual_col, predicted_col) {
-  confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
-  
-  tp <- confusion_matrix[2, 2]
-  tn <- confusion_matrix[1, 1]
-  fp <- confusion_matrix[1, 2]
-  fn <- confusion_matrix[2, 1]
-  
-  sensitivity <- tp / (tp + fn)
-  
-  return(sensitivity)
-}
+    calculate_sensitivity <- function(data, actual_col, predicted_col) {
+    confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
+    
+    tp <- confusion_matrix[2, 2]
+    tn <- confusion_matrix[1, 1]
+    fp <- confusion_matrix[1, 2]
+    fn <- confusion_matrix[2, 1]
+    
+    sensitivity <- tp / (tp + fn)
+    
+    return(sensitivity)
+    }
 
-# Test function
-sensitivity <- calculate_sensitivity(classifications_output_data, "class", "scored.class")
-print(paste("Sensitivity:", sensitivity))
+    # Test function
+    sensitivity <- calculate_sensitivity(classifications_output_data, "class", "scored.class")
+    print(paste("Sensitivity:", sensitivity))
     ```
 
 7.  *Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.*
@@ -214,38 +214,36 @@ print(paste("Sensitivity:", sensitivity))
     $$
 
     ```{r}
+    # F1 score function
 
-# F1 score function
+    calculate_f1 <- function(data, actual_col, predicted_col) {
+    
+    precision <- calculate_precision(data, actual_col, predicted_col)
+    sensitivity <- calculate_sensitivity(data, actual_col, predicted_col)
+    
+    f1_score <- (2 * precision * sensitivity) / (precision + sensitivity)
+    
+    return(f1_score)
+    }
 
-calculate_f1 <- function(data, actual_col, predicted_col) {
-  
-  precision <- calculate_precision(data, actual_col, predicted_col)
-  sensitivity <- calculate_sensitivity(data, actual_col, predicted_col)
-  
-  f1_score <- (2 * precision * sensitivity) / (precision + sensitivity)
-  
-  return(f1_score)
-}
-
-# Test function
-f1_score <- calculate_f1(classifications_output_data, "class", "scored.class")
-print(paste("F1 Score:", f1_score))
+    # Test function
+    f1_score <- calculate_f1(classifications_output_data, "class", "scored.class")
+    print(paste("F1 Score:", f1_score))
     ```
 
 9.  *Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. (Hint: If 0 \< 𝑎 \< 1 and 0 \< 𝑏 \< 1 then 𝑎𝑏 \< 𝑎.)*
 
     ```{r}
+    # F1 bounds demonstration
 
-# F1 bounds demonstration
+    # Example values between 0 and 1
+    precision_test <- 0.7
+    sensitivity_test <- 0.8
 
-# Example values between 0 and 1
-precision_test <- 0.7
-sensitivity_test <- 0.8
+    f1_test <- (2 * precision_test * sensitivity_test) / 
+            (precision_test + sensitivity_test)
 
-f1_test <- (2 * precision_test * sensitivity_test) / 
-           (precision_test + sensitivity_test)
-
-print(paste("Example F1 Score:", f1_test))
+    print(paste("Example F1 Score:", f1_test))
     ```
 
 10. *Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.*
@@ -257,27 +255,27 @@ print(paste("Example F1 Score:", f1_test))
 11. *Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.*
 
     ```{r}
-# Question 11: Produce all classification metrics
+    # Question 11: Produce all classification metrics
 
-cat("=== Classification Metrics ===\n\n")
+    cat("=== Classification Metrics ===\n\n")
 
-accuracy <- calculate_accuracy(classifications_output_data, "class", "scored.class")
-cat(paste("Accuracy:          ", round(accuracy, 4), "\n"))
+    accuracy <- calculate_accuracy(classifications_output_data, "class", "scored.class")
+    cat(paste("Accuracy:          ", round(accuracy, 4), "\n"))
 
-error_rate <- calculate_error_rate(classifications_output_data, "class", "scored.class")
-cat(paste("Error Rate:        ", round(error_rate, 4), "\n"))
+    error_rate <- calculate_error_rate(classifications_output_data, "class", "scored.class")
+    cat(paste("Error Rate:        ", round(error_rate, 4), "\n"))
 
-precision <- calculate_precision(classifications_output_data, "class", "scored.class")
-cat(paste("Precision:         ", round(precision, 4), "\n"))
+    precision <- calculate_precision(classifications_output_data, "class", "scored.class")
+    cat(paste("Precision:         ", round(precision, 4), "\n"))
 
-sensitivity <- calculate_sensitivity(classifications_output_data, "class", "scored.class")
-cat(paste("Sensitivity:       ", round(sensitivity, 4), "\n"))
+    sensitivity <- calculate_sensitivity(classifications_output_data, "class", "scored.class")
+    cat(paste("Sensitivity:       ", round(sensitivity, 4), "\n"))
 
-specificity <- calculate_specificity(classifications_output_data, "class", "scored.class")
-cat(paste("Specificity:       ", round(specificity, 4), "\n"))
+    specificity <- calculate_specificity(classifications_output_data, "class", "scored.class")
+    cat(paste("Specificity:       ", round(specificity, 4), "\n"))
 
-f1_score <- calculate_f1(classifications_output_data, "class", "scored.class")
-cat(paste("F1 Score:          ", round(f1_score, 4), "\n"))
+    f1_score <- calculate_f1(classifications_output_data, "class", "scored.class")
+    cat(paste("F1 Score:          ", round(f1_score, 4), "\n"))
     ```
 
 12. *Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?*
