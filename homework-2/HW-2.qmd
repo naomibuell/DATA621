@@ -1,3 +1,4 @@
+``` r
 ---
 title: "Classification Metrics"
 subtitle: "Homework #2"
@@ -22,18 +23,19 @@ header-includes:
   - \rhead{Naomi Buell, Richie Rivera, Alexander Simon, Said Naqwe, and Nana Frimpong}
   - \setcounter{secnumdepth}{7}
 ---
+```
 
-    ```{r}
-    #| label: Load necessary libraries
-    #| include: TRUE
-    #| warning: FALSE
-    library(tidyverse)
-    library(skimr)
-    library(corrplot)
-    library(ggplot2)
-    library(GGally)
-    library(janitor)
-    ```
+```{r}
+#| label: Load necessary libraries
+#| include: TRUE
+#| warning: FALSE
+library(tidyverse)
+library(skimr)
+library(corrplot)
+library(ggplot2)
+library(GGally)
+library(janitor)
+```
 
 # Homework Solutions
 
@@ -70,7 +72,7 @@ header-includes:
     #| include: TRUE
     tn <- confusion_matrix[1, 1]
     fn <- confusion_matrix[2, 1]
-    
+
     # print
     print(paste("True Negatives:", tn))
     print(paste("False Negatives:", fn))
@@ -141,14 +143,14 @@ header-includes:
 
     calculate_precision <- function(data, actual_col, predicted_col) {
     confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
-    
+
     tp <- confusion_matrix[2, 2]
     tn <- confusion_matrix[1, 1]
     fp <- confusion_matrix[1, 2]
     fn <- confusion_matrix[2, 1]
-    
+
     precision <- tp / (tp + fp)
-    
+
     return(precision)
     }
 
@@ -169,14 +171,14 @@ header-includes:
 
     calculate_sensitivity <- function(data, actual_col, predicted_col) {
     confusion_matrix <- table(data[[actual_col]], data[[predicted_col]])
-    
+
     tp <- confusion_matrix[2, 2]
     tn <- confusion_matrix[1, 1]
     fp <- confusion_matrix[1, 2]
     fn <- confusion_matrix[2, 1]
-    
+
     sensitivity <- tp / (tp + fn)
-    
+
     return(sensitivity)
     }
 
@@ -217,12 +219,12 @@ header-includes:
     # F1 score function
 
     calculate_f1 <- function(data, actual_col, predicted_col) {
-    
+
     precision <- calculate_precision(data, actual_col, predicted_col)
     sensitivity <- calculate_sensitivity(data, actual_col, predicted_col)
-    
+
     f1_score <- (2 * precision * sensitivity) / (precision + sensitivity)
-    
+
     return(f1_score)
     }
 
@@ -312,7 +314,7 @@ header-includes:
 
     ```{r}
     #| label: Question 13 - pROC package
-    
+
     # Load pROC package
     library(pROC)
 
@@ -328,5 +330,5 @@ header-includes:
 
     # Compare with our custom function (assuming roc_result$auc is available from section 10)
     print("Comparison:")
-    print(paste("Custom AUC:", roc_result$auc, "pROC AUC:", auc_proc))
+    print(paste("Custom AUC:", roc_obj$auc, "pROC AUC:", auc_proc))
     ```
