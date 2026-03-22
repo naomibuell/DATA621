@@ -1,4 +1,4 @@
-``` r
+
 ---
 title: "Classification Metrics"
 subtitle: "Homework #2"
@@ -23,7 +23,7 @@ header-includes:
   - \rhead{Naomi Buell, Richie Rivera, Alexander Simon, Said Naqwe, and Nana Frimpong}
   - \setcounter{secnumdepth}{7}
 ---
-```
+
 
 ```{r}
 #| label: Load necessary libraries
@@ -310,7 +310,7 @@ library(pracma)
 
     # ROC and AUC
     performance <- calc_auroc(classifications_output_data$class,
-                              classifications_output_data$scored.probability)
+                              classifications_output_data$scored.probability) 
 
     # Summary table
     metrics_table <- data.frame(
@@ -321,14 +321,14 @@ library(pracma)
                       performance$auc_value), 4)
     )
 
-    # Table Fir Classifcaiton Metrics
+    # Table Fir Classification Metrics
     knitr::kable(metrics_table, 
                  caption = "Classification Metrics Summary",
                  col.names = c("Metric", "Value"),
                  align = c("l", "r"))
-```    
     
-
+    
+```    
     
 
 12. *Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?*

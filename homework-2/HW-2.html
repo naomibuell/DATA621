@@ -637,7 +637,7 @@ window.Quarto = {
 <span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ROC and AUC</span></span>
 <span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    performance <span class="ot">&lt;-</span> <span class="fu">calc_auroc</span>(classifications_output_data<span class="sc">$</span>class,</span>
-<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>                              classifications_output_data<span class="sc">$</span>scored.probability)</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>                              classifications_output_data<span class="sc">$</span>scored.probability) </span>
 <span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Summary table</span></span>
 <span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>    metrics_table <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
@@ -648,7 +648,7 @@ window.Quarto = {
 <span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a>                      performance<span class="sc">$</span>auc_value), <span class="dv">4</span>)</span>
 <span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Table Fir Classifcaiton Metrics</span></span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Table Fir Classification Metrics</span></span>
 <span id="cb31-22"><a href="#cb31-22" aria-hidden="true" tabindex="-1"></a>    knitr<span class="sc">::</span><span class="fu">kable</span>(metrics_table, </span>
 <span id="cb31-23"><a href="#cb31-23" aria-hidden="true" tabindex="-1"></a>                 <span class="at">caption =</span> <span class="st">"Classification Metrics Summary"</span>,</span>
 <span id="cb31-24"><a href="#cb31-24" aria-hidden="true" tabindex="-1"></a>                 <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">"Metric"</span>, <span class="st">"Value"</span>),</span>
