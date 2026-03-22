@@ -360,6 +360,7 @@ library(pracma)
     print(paste("Sensitivity - Ours:", sensitivity, "Caret:", caret_sensitivity))
     print(paste("Specificity - Ours:", specificity, "Caret:", caret_specificity))
     ```
+    Both methods calculated an identical accuracy of 0.8066 , but the sensitivity and specificity values were perfectly swapped. This discrepancy occurred because our custom functions evaluated '1' as the target condition, whereas the caret package defaulted to treating '0' as the positive class.
 
 13. *Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?*
 
@@ -383,3 +384,5 @@ library(pracma)
     print("Comparison:")
     print(paste("Custom AUC:", roc_obj$auc, "pROC AUC:", auc_proc))
     ```
+
+    The results from the pROC package are mathematically identical to our custom functions, with both yielding an AUC of 0.8503. The primary difference are in the visualization defaults. Our custom ggplot function plots True Positive Rate vs. False Positive Rate (0 to 1). In contrast, pROC's base plot graphs Sensitivity vs. Specificity, drawing the Specificity x-axis in reverse order (1 to 0) to maintain the standard ROC curve shape.
