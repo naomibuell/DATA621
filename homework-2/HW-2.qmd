@@ -297,31 +297,39 @@ library(pracma)
     sprintf('The area under the ROC curve is %.2f', performance$auc_value)
     ```
 
-11. *Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.*
-
-    ```{r}
-    # Question 11: Produce all classification metrics
-
-    cat("=== Classification Metrics ===\n\n")
+ 
+  11. *Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.*
+```{r}
 
     accuracy <- calculate_accuracy(classifications_output_data, "class", "scored.class")
-    cat(paste("Accuracy:          ", round(accuracy, 4), "\n"))
-
     error_rate <- calculate_error_rate(classifications_output_data, "class", "scored.class")
-    cat(paste("Error Rate:        ", round(error_rate, 4), "\n"))
-
     precision <- calculate_precision(classifications_output_data, "class", "scored.class")
-    cat(paste("Precision:         ", round(precision, 4), "\n"))
-
     sensitivity <- calculate_sensitivity(classifications_output_data, "class", "scored.class")
-    cat(paste("Sensitivity:       ", round(sensitivity, 4), "\n"))
-
     specificity <- calculate_specificity(classifications_output_data, "class", "scored.class")
-    cat(paste("Specificity:       ", round(specificity, 4), "\n"))
-
     f1_score <- calculate_f1(classifications_output_data, "class", "scored.class")
-    cat(paste("F1 Score:          ", round(f1_score, 4), "\n"))
-    ```
+
+    # ROC and AUC
+    performance <- calc_auroc(classifications_output_data$class,
+                              classifications_output_data$scored.probability)
+
+    # Summary table
+    metrics_table <- data.frame(
+      Metric = c("Accuracy", "Error Rate", "Precision", 
+                 "Sensitivity", "Specificity", "F1 Score", "AUC"),
+      Value = round(c(accuracy, error_rate, precision, 
+                      sensitivity, specificity, f1_score, 
+                      performance$auc_value), 4)
+    )
+
+    # Table Fir Classifcaiton Metrics
+    knitr::kable(metrics_table, 
+                 caption = "Classification Metrics Summary",
+                 col.names = c("Metric", "Value"),
+                 align = c("l", "r"))
+```    
+    
+
+    
 
 12. *Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?*
 
