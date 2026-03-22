@@ -35,6 +35,7 @@ library(corrplot)
 library(ggplot2)
 library(GGally)
 library(janitor)
+library(pracma)
 ```
 
 # Homework Solutions
@@ -251,7 +252,49 @@ library(janitor)
 10. *Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.*
 
     ```{r}
+    # calc_auroc() creates a ROC curve and calculates the area under the curve
+    # The inputs are a Boolean vector of known classifications ('labels') and
+    # a numeric vector of probability scores ('scores'). The function returns a
+    # list containing the ROC plot (ggplot object) and numeric AUC value
+    # Adapted from https://www.r-bloggers.com/2025/11/roc-curves-in-two-lines-of-code/
 
+    require(pracma)
+
+    calc_auroc <- function(labels, scores){
+      # Sort labels by score
+      labels <- labels[order(scores, decreasing = TRUE)]
+      # Calculate TPR and FPR
+      rates_df <- data.frame(
+        TPR = cumsum(labels) / sum(labels), 
+        # !labels is the negative class (0)
+        FPR = cumsum(!labels) / sum(!labels))
+  
+      # Plot ROC curve
+      p <- ggplot(rates_df, aes(x = FPR, y = TPR)) +
+        geom_line() +
+        ggtitle('ROC Curve')
+  
+      # Calculate AUC using trapezoidal approximation
+      AUC <- pracma::trapz(rates_df$FPR, rates_df$TPR)
+  
+      return(list(roc_plot = p, auc_value = AUC))
+    }
+    ```
+
+    ```{r}
+    # Call the AUROC function with the provided data
+    performance <- calc_auroc(classifications_output_data$class, 
+                              classifications_output_data$scored.probability)
+    ```
+
+    ```{r}
+    # Show ROC plot
+    performance$roc_plot
+    ```
+
+    ```{r}
+    # Show AUC value
+    sprintf('The area under the ROC curve is %.2f', performance$auc_value)
     ```
 
 11. *Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.*
