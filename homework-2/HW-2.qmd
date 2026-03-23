@@ -9,7 +9,7 @@ author:
   - name: Alexander Simon
   - name: Nana Frimpong 
   - name: Said Naqwe
-date: March 22, 2026fi
+date: March 22, 2026
 documentclass: article
 classoption: 11pt
 geometry:
@@ -237,16 +237,21 @@ library(pracma)
 9.  *Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. (Hint: If 0 \< 𝑎 \< 1 and 0 \< 𝑏 \< 1 then 𝑎𝑏 \< 𝑎.)*
 
     ```{r}
-    # F1 bounds demonstration
-
-    # Example values between 0 and 1
-    precision_test <- 0.7
-    sensitivity_test <- 0.8
-
-    f1_test <- (2 * precision_test * sensitivity_test) / 
-            (precision_test + sensitivity_test)
-
-    print(paste("Example F1 Score:", f1_test))
+    # F1 bounds demonstration with grid of values
+    precision_values <- seq(0.01, 0.99, by = 0.1)
+    sensitivity_values <- seq(0.01, 0.99, by = 0.1)
+    
+    f1_scores <- c()
+    
+    for (p in precision_values) {
+      for (s in sensitivity_values) {
+        f1 <- (2 * p * s) / (p + s)
+        f1_scores <- c(f1_scores, f1)
+      }
+    }
+    
+    print(paste("F1 Score Range using range of Precision and Sensitivity values: [", round(min(f1_scores), 4), ", ", 
+                round(max(f1_scores), 4), "]"))
     ```
 
 10. *Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.*
