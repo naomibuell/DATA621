@@ -142,316 +142,89 @@ crime_train |>
 ## Data Preparation
 
 ::: callout-note
-Starting from here, the following sections need to be updated for HW3 (currently carried over from HW1).
+Completed
 :::
+For the crime data used in Homework 3, the first step in data preparation was to check whether any variables contained missing values. Unlike the older baseball assignment text currently carried over in the draft, this crime data set does not contain missing values in either the training or evaluation files. Therefore, no imputation or missingness flag variables were needed.
 
-We handled high missingness in the variables `TEAM_BATTING_HBP`, `TEAM_BASERUN_CS`, and `TEAM_FIELDING_DP` (91.6%, 33.9%, and 12.6% missing, respectively), which are not very correlated with the target variable, by excluding these variables. The remaining variables had less than 10% missing, so we will impute the missing values with the median of each variable. We avoid dropping `TEAM_BASERUN_SB` as it is the most correlated variable with the target variable that has missingness, and instead impute it.
+Even though missing-value treatment was unnecessary, we still prepared the data for binary logistic regression by creating transformed and derived predictors. Several predictors are right-skewed, especially `zn`, `dis`, `rad`, `tax`, and `lstat`. For these variables, log transformations were created using `log1p()`, which reduces skewness while safely handling zero values. These transformed variables may improve model fit by making relationships with the log-odds of the response more stable.
 
-The median imputation was picked based on the distributions of missing variables: `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` have a long right tail so the median is a better imputation method than the mean. Both variables have observed have extreme outliers pulling the mean towards a right direction compared to where most the data sits. When the distribution of variables reveals two distinct peaks as observed in `TEAM_BATTING_SO`, we can refer to this distribution as bimodal. Since the mean of bimodal falls between two peaks, this area is observed to be the underrepresented region of the missing data. The median imputation is utilized to approach one of the two clusters of missing variables with the largest distribution of missing variables. Below are the histograms for the distributions of these variables.
+We also created a small set of engineered variables that may be useful in later models. First, `nox_indus` captures the combined effect of air pollution concentration and industrial land use. Second, `rm_lstat_ratio` measures the balance between average rooms per dwelling and lower-status population, combining a housing-quality measure with a socioeconomic measure. Third, `tax_rad_ratio` captures the relationship between tax burden and highway accessibility. These new variables were created because logistic regression can benefit from transformed and combined predictors when the original variables may not fully capture the structure related to high-crime neighborhoods.
 
-```{r}
-#| label: histograms-missing-variables
-#| fig-cap: "Histograms of variables with missingness selected for imputation"
-#| warning: false
-#| echo: true
-#| eval: false
-
-# Create density curve for TEAM_BASERUN_SB
-p1 <- ggplot(crime_train, aes(x = TEAM_BASERUN_SB)) +
-    geom_density() +
-    theme_minimal() +
-    theme(panel.grid = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
-    xlab("TEAM_BASERUN_SB") +
-    ylab("Density")
-
-# Create density curve for TEAM_PITCHING_SO
-p2 <- ggplot(crime_train, aes(x = TEAM_PITCHING_SO)) +
-    geom_density() +
-    theme_minimal() +
-    theme(panel.grid = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
-    xlab("TEAM_PITCHING_SO") +
-    ylab("")
-
-# Create density curve for TEAM_BATTING_SO
-p3 <- ggplot(crime_train, aes(x = TEAM_BATTING_SO)) +
-    geom_density() +
-    theme_minimal() +
-    theme(panel.grid = element_blank(), axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
-    xlab("TEAM_BATTING_SO") +
-    ylab("") 
-    
-# Combine the histograms
-patchwork::wrap_plots(p1, p2, p3, ncol = 3) + patchwork::plot_layout(guides = 'collect')
-```
-
-To begin by remove variables with high missingness variables and low correlation with `TARGET_WINS`: `TEAM_BATTING_HBP` (91.6% missing, r=0.07), `TEAM_BASERUN_CS` (33.9% missing, r=0.02), and `TEAM_FIELDING_DP` (12.6% missing, r=-0.03).
+Finally, the cleaned training and evaluation data sets were stored as `crime_clean` and `crime_eval_clean` so the later modeling section can use them directly.
 
 ```{r}
-#| label: drop-variables
+#| label: data-preparation-check-missing
+#| echo: true
+
+# Check missing values in training and evaluation data
+missing_train <- crime_train |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+
+missing_eval <- crime_eval |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+
+missing_train
+missing_eval
+
+#| label: data-preparation-transformations
 #| echo: true
 #| warning: false
-#| eval: false
 
-# Drop high missingness variables and low-correlation variables with the data
-# These variables lack a strong relationship with response variable TARGET_WINS
-crime_clean <- crime_train |>
-  select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
+# Start with copies of the original datasets
+crime_clean <- crime_train
+crime_eval_clean <- crime_eval
 
-crime_eval_clean <- crime_eval |>
-  select(-TEAM_BATTING_HBP, -TEAM_BASERUN_CS, -TEAM_FIELDING_DP)
-```
-
-Before our predictor variables `TEAM_BASERUN_CS`, `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are imputed, a binary indicator is created to preserve information that the value was originally missing. Our indicator for each flag is (1 = missing, 0 = present).
-
-```{r}
-#| label: missingness flags indicator
-#| echo: true
-#| warning: false
-#| eval: false
+# Create transformed and engineered predictors
 crime_clean <- crime_clean |>
   mutate(
-    TEAM_BASERUN_SB_MISSING  = as.integer(is.na(TEAM_BASERUN_SB)),
-    TEAM_BATTING_SO_MISSING  = as.integer(is.na(TEAM_BATTING_SO)),
-    TEAM_PITCHING_SO_MISSING = as.integer(is.na(TEAM_PITCHING_SO))
+    # Log transforms for right-skewed predictors
+    log_zn    = log1p(zn),
+    log_dis   = log1p(dis),
+    log_rad   = log1p(rad),
+    log_tax   = log1p(tax),
+    log_lstat = log1p(lstat),
+
+    # Engineered variables
+    nox_indus     = nox * indus,
+    rm_lstat_ratio = rm / lstat,
+    tax_rad_ratio  = tax / rad
   )
 
 crime_eval_clean <- crime_eval_clean |>
   mutate(
-    TEAM_BASERUN_SB_MISSING  = as.integer(is.na(TEAM_BASERUN_SB)),
-    TEAM_BATTING_SO_MISSING  = as.integer(is.na(TEAM_BATTING_SO)),
-    TEAM_PITCHING_SO_MISSING = as.integer(is.na(TEAM_PITCHING_SO))
+    # Log transforms for right-skewed predictors
+    log_zn    = log1p(zn),
+    log_dis   = log1p(dis),
+    log_rad   = log1p(rad),
+    log_tax   = log1p(tax),
+    log_lstat = log1p(lstat),
+
+    # Engineered variables
+    nox_indus     = nox * indus,
+    rm_lstat_ratio = rm / lstat,
+    tax_rad_ratio  = tax / rad
   )
-```
 
-Imputation is now based on the distribution of missing data of the following variables. `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO`, and `TEAM_BATTING_SO`. `TEAM_BASERUN_SB` and `TEAM_PITCHING_SO` are right skewed, therefore they are imputed around the mean. `TEAM_BATTING_SO` is bimodal, so we can impute around the median to avoid placing the imputed values in region between two peaks where only a few observations exist.
-
-```{r}
-#| label: imputation
+#| label: data-preparation-verify
 #| echo: true
-#| warning: false
-#| eval: false
 
-crime_clean <- crime_clean %>%
-  mutate(
-    # Mean imputation for right-tailed variables
-    TEAM_BASERUN_SB = ifelse(
-      is.na(TEAM_BASERUN_SB),
-      mean(TEAM_BASERUN_SB, na.rm = TRUE),
-      TEAM_BASERUN_SB
-    ),
-    TEAM_PITCHING_SO = ifelse(
-      is.na(TEAM_PITCHING_SO),
-      mean(TEAM_PITCHING_SO, na.rm = TRUE),
-      TEAM_PITCHING_SO
-    ),
+# Verify dimensions after preparation
+dim(crime_clean)
+dim(crime_eval_clean)
 
-    # Median imputation for bimodal variable
-    TEAM_BATTING_SO = ifelse(
-      is.na(TEAM_BATTING_SO),
-      median(TEAM_BATTING_SO, na.rm = TRUE),
-      TEAM_BATTING_SO
-    )
-  )
-
-crime_eval_clean <- crime_eval_clean %>%
-  mutate(
-    # Mean imputation for right-tailed variables
-    TEAM_BASERUN_SB = ifelse(
-      is.na(TEAM_BASERUN_SB),
-      mean(TEAM_BASERUN_SB, na.rm = TRUE),
-      TEAM_BASERUN_SB
-    ),
-    TEAM_PITCHING_SO = ifelse(
-      is.na(TEAM_PITCHING_SO),
-      mean(TEAM_PITCHING_SO, na.rm = TRUE),
-      TEAM_PITCHING_SO
-    ),
-
-    # Median imputation for bimodal variable
-    TEAM_BATTING_SO = ifelse(
-      is.na(TEAM_BATTING_SO),
-      median(TEAM_BATTING_SO, na.rm = TRUE),
-      TEAM_BATTING_SO
-    )
-   )
-```
-
-When a distribution is observed to be skewed to the right, meaning small number of outliers has influence on the response variable `TARGET_WINS`, the log transformation can be applied to balance the scale of distribution. Utilizing log compresses the distribution of missing variable closer to symmetric shape. This makes the relationship with `TARGET_WINS` more linear and easier for the model to capture. `log1p` is used to handle any zero without producing undefined results.
-
-```{r}
-#| label: log-transformations
-#| echo: true
-#| warning: false
-#| eval: false
-
-# Log transform right-skewed variables
-crime_clean <- crime_clean %>%
-  mutate(
-    LOG_TEAM_BASERUN_SB  = log1p(TEAM_BASERUN_SB),
-    LOG_TEAM_PITCHING_SO = log1p(TEAM_PITCHING_SO),
-    LOG_TEAM_FIELDING_E  = log1p(TEAM_FIELDING_E)
-  )
-
-crime_eval_clean <- crime_eval_clean %>%
-  mutate(
-    LOG_TEAM_BASERUN_SB  = log1p(TEAM_BASERUN_SB),
-    LOG_TEAM_PITCHING_SO = log1p(TEAM_PITCHING_SO),
-    LOG_TEAM_FIELDING_E  = log1p(TEAM_FIELDING_E)
-  )
-```
-
-We can create three new variables that captures negative and positive impact on the wins for the team.
-
-```{r}
-#| label: feature-engineering
-#| echo: true
-#| warning: false
-#| eval: false
-
-#  HR_DIFFERENTIAL and BAT_BB_SO_RATIO
-crime_clean <- crime_clean |>
-  mutate(
-# Net home run differential (offensive power vs pitching vulnerability)
-# The team that hits more home runs that it gives up will produce positive value
-# the team that allows more home runs than it hits will produce a negative 
-#value, meaing they loosing the game
-# Zero indicates the team is even in home runs
-    HR_DIFFERENTIAL = TEAM_BATTING_HR - TEAM_PITCHING_HR,
-  # Here we can measure how batter can judge whch pitch they would take a swing at
-    # If the ratio is greater than 1, it reveals the team walk more than they strike 
-  # showing a more cohesive and patient team
-    # This may happen if a batter force the pitchers to throw more pitches
-    
-    BAT_BB_SO_RATIO = ifelse(TEAM_BATTING_SO > 0,
-                             TEAM_BATTING_BB / TEAM_BATTING_SO, NA)
-  )
-
-crime_eval_clean <- crime_eval_clean |>
-  mutate(
-    HR_DIFFERENTIAL = TEAM_BATTING_HR - TEAM_PITCHING_HR,
-    BAT_BB_SO_RATIO = ifelse(TEAM_BATTING_SO > 0,
-                             TEAM_BATTING_BB / TEAM_BATTING_SO, NA)
-  )
-
-#  Impute missing values in BAT_BB_SO_RATIO with median
-crime_clean <- crime_clean |>
-  mutate(
-    BAT_BB_SO_RATIO = ifelse(is.na(BAT_BB_SO_RATIO),
-                             median(BAT_BB_SO_RATIO, na.rm = TRUE), BAT_BB_SO_RATIO)
-  )
-
-crime_eval_clean <- crime_eval_clean |>
-  mutate(
-    BAT_BB_SO_RATIO = ifelse(is.na(BAT_BB_SO_RATIO),
-                             median(BAT_BB_SO_RATIO, na.rm = TRUE), BAT_BB_SO_RATIO)
-   )
-```
-
-Finally we can verify that there no missing variables that remain based on the results of our imputation.
-
-```{r}
-#| label: tbl-verify-imputation
-#| echo: true
-#| warning: false
-#| eval: false
-
-# Verify that no variables have remaining missingness
+# Verify that no missing values remain after transformations
 crime_clean |>
   summarise(across(everything(), ~ sum(is.na(.)))) |>
-  tidyr::pivot_longer(everything(),
-                      names_to  = "Variable",
-                      values_to = "Missing") |>
-  filter(Missing > 0) |>
-  nrow()
-```
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
+  filter(Missing > 0)
 
-## Verifying Linearity Assumption
+crime_eval_clean |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
+  filter(Missing > 0)
 
-Linear regression makes four important assumptions:
-
-1.  The independent and dependent variables are linearly related.
-2.  The errors are independent of each other.
-3.  The errors have constant variance.
-4.  The errors are normally distributed.
-
-The last three will be evaluated after models are built (section 3). Here, we test the assumption of linearity using pair plots of the variables in the cleaned training dataset. To avoid overcrowded plots, we divided the variables into three groups.
-
-### Batting and baserun variables
-
--   In the first row of @fig-correlation-matrix, the correlation coefficients show that all batting and baserun variables except `TEAM_BATTING_SO` have significant correlations with the target variable.
-
--   In the first column, the scatterplots show that `TEAM_BATTING_H` and `TEAM_BATTING_2B` have the clearest linear relationship with `TARGET_WINS`.
-
--   There are no obvious nonlinear relationships between batting and baserun variables and the target variable.
-
-```{r}
-#| eval: false
-# This block takes a few seconds
-crime_clean |>
-  select(-c(ends_with('MISSING'))) |>  # omit categorical (flag) variables
-  select(TARGET_WINS, starts_with('TEAM_BATTING'), TEAM_BASERUN_SB) |>
-  ggpairs(
-    # Color transparency and small data points help reduce overplotting
-    mapping = aes(alpha = 0.1),
-    lower = list(continuous = wrap('points', size = 0.01)),
-    progress = FALSE
-    ) +
-    theme(
-      strip.text = element_text(size = 8)
-    )
-```
-
-### Pitching and fielding variables
-
--   In the first row, the correlation coefficients show that all pitching variables and the fielding variable have significant correlations with the target variable.
-
--   In the first column, the scatterplots show that `TEAM_PITCHING_BB` has the clearest linear relationship with `TARGET_WINS`.
-
-    -   Two independent variables (`TEAM_PITCHING_H` and `TEAM_PITCHING_SO`) appear to be related by a horizontal line. Technically, this satisfies the assumption of linearity, but it suggests that these variables do not have predictive value.
-
--   There are no obvious nonlinear relationships between pitching and fielding variables and the target variable.
-
-```{r}
-#| eval: false
-# This block takes a few seconds
-crime_clean |>
-  select(-c(ends_with('MISSING'))) |>  # omit categorical (flag) variables
-  select(TARGET_WINS, starts_with('TEAM_PITCHING'), TEAM_FIELDING_E) |>
-  ggpairs(
-    mapping = aes(alpha = 0.1),
-    lower = list(continuous = wrap('points', size = 0.01)),
-    progress = FALSE
-    ) +
-    theme(
-      strip.text = element_text(size = 8)
-    )    
-```
-
-### New variables
-
--   In the first row, the correlation coefficients show that four of the five newly created variables have significant correlations with the target variable. The exception was `LOG_TEAM_PITCHING_SO`, which had a correlation coefficient of 0.003.
-
--   In the first column, the scatterplots show that `BAT_BB_SO_RATIO` has the clearest linear relationship with `TARGET_WINS`.
-
-    -   `LOG_TEAM_PITCHING_SO` appears to be related by a horizontal line. Although this satisfies the assumption of linearity, it suggests that this variable may not have predictive value.
-
--   There are no obvious nonlinear relationships between the newly created variables and the target variable.
-
-```{r}
-#| eval: false
-# This block takes a few seconds
-# Pair plots for new variables
-crime_clean |>
-  select(TARGET_WINS, starts_with('LOG'), HR_DIFFERENTIAL, BAT_BB_SO_RATIO) |>
-  ggpairs(
-    mapping = aes(alpha = 0.1),
-    lower = list(continuous = wrap('points', size = 0.01)),
-    progress = FALSE
-    ) +
-    theme(
-      strip.text = element_text(size = 8)
-    )
-```
 
 ### Linearity Assumption Summary
 
