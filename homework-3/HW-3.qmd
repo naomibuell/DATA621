@@ -37,7 +37,7 @@ library(janitor)
 
 # Introduction
 
-We build a binary logistic regression model on a data set containing information on crime for various neighborhoods of a major city to prediect whether the neighborhood will be at risk for high crime levels. Each record in our data has a response variable indicating whether or not the crime rate is above the median crime rate or not. Our R statistical programming code is included in Appendix A.
+We build a binary logistic regression model on a data set containing information on crime for various neighborhoods of a major city to predict whether the neighborhood will be at risk for high crime levels. Each record in our data has a response variable indicating whether or not the crime rate is above the median crime rate or not. Our R statistical programming code is included in Appendix A.
 
 # Data Exploration
 
@@ -139,12 +139,15 @@ crime_train |>
 
 @fig-box-plots shows the distribution of z-scores for all variables and highlights potential outliers in the training data. The variable `zn` (proportion of residential land zoned for large lots over 25,000 square feet) has many high outliers, which is plausible because some neighborhoods may have much higher shares of large lots than others; its maximum value is `r max(crime_train$zn)` percent. The variable `rm` (average number of rooms per dwelling) also has several outliers, ranging from `r min(crime_train$rm)` to `r max(crime_train$rm)` rooms. Likewise, `medv` (median value of owner-occupied homes) ranges from \$`r min(crime_train$medv)`k to \$`r max(crime_train$medv)`k, which is not unexpected given variation in housing prices across neighborhoods and unspecified data years. The variables `lstat` (percent lower status population) and `dis` (weighted mean distance to five Boston employment centers) show a few high outliers (`r max(crime_train$lstat)` percent and `r max(crime_train$dis)` units, respectively). The variable `chas` has a high value of 1, which is expected because it is a binary indicator of whether a suburb borders the Charles River. Overall, these outliers appear to reflect real neighborhood variability rather than data-entry errors. If influence diagnostics later reveal problematic leverage points, we can consider adding indicator variables to account for them.
 
-## Data Preparation
+# Data Preparation
 
 ::: callout-note
 Completed
+
+I don't think we need to compare this dataset to the baseball dataset (Homework 1).
 :::
-For the crime data used in Homework 3, the first step in data preparation was to check whether any variables contained missing values. Unlike the older baseball assignment text currently carried over in the draft, this crime data set does not contain missing values in either the training or evaluation files. Therefore, no imputation or missingness flag variables were needed.
+
+For the crime data used in Homework 3, the first step in data preparation was to check whether any variables contained missing values. This crime data set does not contain missing values in either the training or evaluation files. Therefore, no imputation or missingness flag variables were needed.
 
 Even though missing-value treatment was unnecessary, we still prepared the data for binary logistic regression by creating transformed and derived predictors. Several predictors are right-skewed, especially `zn`, `dis`, `rad`, `tax`, and `lstat`. For these variables, log transformations were created using `log1p()`, which reduces skewness while safely handling zero values. These transformed variables may improve model fit by making relationships with the log-odds of the response more stable.
 
@@ -228,13 +231,12 @@ crime_eval_clean |>
 
 ### Linearity Assumption Summary
 
-The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
+# The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
 
-## Build Models
+## Data Splits
 
-First, we will split our dataset into a trianing and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
+# First, we will split our dataset into a training and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
 
-```{r}
 #| label: split-data
 #| eval: false
 
@@ -244,111 +246,81 @@ crime_train_split <- crime_clean[train_indices, ]
 crime_test_split <- crime_clean[-train_indices, ]
 ```
 
-We will start by building three models. The first model contains all the variables in the cleaned training dataset. The second model only includes the variables that are most correlated with the target variable and the two new predictors (`HR_DIFFERENTIAL` and `BAT_BB_SO_RATIO`). Finally, we'll create a third model using automated stepwise selection to identify the best subset of predictors. This method iteratively adds or removes predictors to find the model that best balances fit and complexity.
+# Check assumptions for binary logistic regression
 
-We will compare the performance of these two models to determine whether including all variables improves performance compared to a model with just the most correlated variables. The stepwise selection model will help us identify whether there are any additional predictors that improve performance beyond the most correlated variables and the new predictors. We will evaluate the performance of these models in the next section to determine which one is best for predicting `TARGET_WINS`.
+::: callout-note
+To be added
+:::
 
-```{r}
-#| label: build-models
-#| eval: false
+# Build models
 
-# First model with all variables
-model_full <- lm(
-  TARGET_WINS ~ .,
-  data = crime_train_split |>
-    select(-INDEX)
-  )
+::: callout-note
+Completed but file won't render. The rendering fails on line 265, but I'm not sure what's wrong. Any ideas?
+:::
 
-# Second model with most correlated variables and new predictors
-model_theory <- lm(
-  TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_BB + HR_DIFFERENTIAL + BAT_BB_SO_RATIO,
-    data = crime_train_split
-  )
+We compared three models. Our first model included all the variables in the cleaned training dataset. The second model aimed to reduce multicollinearity by omitting variables that had correlation coefficients $|r|>0.7$ (see Data Exploration section). Finally, we generated the third model using backward stepwise selection from a full model that included transformed variables and newly created variables (see Data Preparation section).
 
-# A third model using Automated Stepwise Selection
-model_stepwise <- step(
-  model_full,
-  direction = "backward",
-  trace = 0
-)
-```
+## Model 1. All untransformed variables
 
-### Verifying Remaining Assumptions for Linear Regression
-
-Prior to comparing the models, we will check the remaining assumptions of linear regression. Restating the assumptions:
-
-#### The independent and dependent variables are linearly related.
-
-This was verified above during the data exploration phase using pair plots. The scatterplots in the pair plots showed that there were no obvious nonlinear relationships between the independent variables and the target variable `TARGET_WINS`. Therefore, the assumption of linearity is satisfied.
-
-#### The errors are independent of each other.
-
-To check for independence of errors, we can plot the auto-correlations plots (ACF) of the residuals for each model. If there are significant autocorrelations at any lag, this suggests that the errors are not independent.
+As shown below, the most significant predictors were `nox` and `rad` ($P<0.001$). In addition, `age` and `ptratio` were significant at the $P<0.01$ level, and `dis` and `tax` were significant at the $P<0.05$ level. The AIC for this model is `r\ AIC(model1)`.
 
 ```{r}
-#| label: check-independence
-#| fig-cap: ACF plots of residuals for each model
-#| eval: false
+#| label: build-model1
 
-par(mfrow = c(1, 3))
-acf(residuals(model_full), main="ACF: Full Model")
-acf(residuals(model_theory), main="ACF: Theory Model")
-acf(residuals(model_stepwise), main="ACF: Stepwise Model")
+model1 <- glm(
+  formula = target ~ zn + indus + chas + nox + rm + age + dis + rad + tax +
+                     ptratio + lstat + medv,
+  family = "binomial",
+  data = crime_train_split)
+
+summary(model1)
 ```
 
-These ACF plots show that there are just a few significant autocorrelations from lag 1 to lag 10 for all three models, which suggests that the errors are not independent. This may be due to the fact that the data is time series data, and there may be temporal dependencies in the errors. This would make sense as the performance of a baseball team in one year may be related to its performance in the previous year and this data is defined as "...\[representing\] a professional baseball team from the years 1871 to 2006 inclusive. Each record has the performance of the team for the given year, with all of the statistics adjusted to match the performance of a 162 game season."
+## Model 2. Reduce multicollinearity
 
-#### The errors have constant variance (Homoscedasticity).
+In the Data Exploration section, we showed that `rad` and `tax` were strongly correlated (r=0.91), which suggests that only one of these variables is needed in Model 1 (we chose to retain `rad` as it was more highly significant). Similarly, `medv` was shown to be potentially multicollinear with `lstat` (r=0.74) and `rm` (r=0.71), so we removed the latter variables.
 
-To check for constant variance, we examine the Residuals vs Fitted plots and the Scale-Location plots for our models. We are looking for a relatively random scatter of points around the horizontal zero line. If the spread of the residuals increases or decreases systematically with the fitted values (forming a "megaphone" or "funnel" shape), it indicates heteroscedasticity.
+In addition, the correlation between `nox` (predictor) and `target` (response) suggests that `nox` is an important predictor, so we removed its potential collinear pairs `age` and `dis`. Although `nox` was moderately correlated with `indus` (r=0.76), we retained `indus` because removal of both `indus` and `tax` (highly correlated with `rad`) would eliminate a potentially informative predictor.
+
+These changes resulted in a model with AIC `r\ AIC(model2)`.
 
 ```{r}
-#| label: check-constant-variance
-#| fig-cap: "Residuals vs Fitted and Scale-Location plots for each model"
-#| eval: false
+#| label: build-model2
 
-# Set up a 2x3 grid for the plots
-par(mfrow = c(2, 3))
+model2 <- glm(
+  formula = target ~ zn + indus + chas + nox + rad + ptratio + medv,
+  family = "binomial",
+  data = crime_train_split)
 
-# Row 1: Residuals vs Fitted
-plot(model_full, which = 1, main = "Resid vs Fitted (Full)")
-plot(model_theory, which = 1, main = "Resid vs Fitted (Theory)")
-plot(model_stepwise, which = 1, main = "Resid vs Fitted (Step)")
-
-# Row 2: Scale-Location
-plot(model_full, which = 3, main = "Scale-Location (Full)")
-plot(model_theory, which = 3, main = "Scale-Location (Theory)")
-plot(model_stepwise, which = 3, main = "Scale-Location (Step)")
+summary(model2)
 ```
 
-The residuals vs fitted plots across all three models show that the residuals are randomly scattered around the horizontal zero line, which is evidence that the model adheres to the assumption of homoscedasticity. The scale-location plots show a slightly different story where theres a consistant 'U' or 'V' shape with the red line indicating that the variance of the residuals is not constant across the range of fitted values. This suggests that there may be some heteroscedasticity in the models, which could affect the reliability of the standard errors and confidence intervals.
+## Model 3. Backward stepwise variable selection
 
-#### The errors are normally distributed.
+For this model, we performed backward stepwise selection from the set of variables including transformed and newly created variables.
 
-To verify that our residuals follow a normal distribution, we use Normal Q-Q plots. If the assumption holds then the standardized residuals should be in a diagonal line. Deviations at the lower or upper tails suggest skewed or heavy-tailed errors. We will also perform a Shapiro-Wilk statistical test to quantitatively assess normality, where a p-value \< 0.05 indicates a significant departure from a normal distribution.
+The best model had `nox`, `tax_rad_ratio`, `ptratio`, and `age` as the most significant predictors (P\<0.001). In addition, `log_dis` and `rm_lstat_ratio` were significant at the P\<0.05 level. The AIC of this model was `r\ AIC(model3)`, which was lower than that of Models 1 and 2.
 
 ```{r}
-#| label: check-normality
-#| fig-cap: "Normal Q-Q plots for checking normality of errors"
-#| eval: false
+#| label: build-model3
 
-# Set up a 1x3 grid for the plots
-par(mfrow = c(1, 3))
-plot(model_full, which = 2, main = "Normal Q-Q (Full)")
-plot(model_theory, which = 2, main = "Normal Q-Q (Theory)")
-plot(model_stepwise, which = 2, main = "Normal Q-Q (Step)")
+# Full model includes all variables
+model_full <- glm(
+  formula = target ~ log_zn + indus + chas + nox + rm + age + 
+                     log_dis + log_rad + log_tax + ptratio + log_lstat + medv +
+                     nox_indus + rm_lstat_ratio + tax_rad_ratio,
+  family = "binomial",
+  data = crime_train_split)
 
-# Formal Shapiro-Wilk Test (Note: p-value < 0.05 means NOT normal)
-shapiro.test(residuals(model_full))
-shapiro.test(residuals(model_theory))
-shapiro.test(residuals(model_stepwise))
+# Select variables
+model3 <- step(model_full, direction = "backward")
+
+summary(model3)
 ```
 
-For all 3 models the points follow the diagonal line reasonably well in the middle of the distribution but the upper tail curves upwards and the lower tail curves downwards. This suggests that the residuals have heavier tails than a normal distribution, which may indicate the presence of outliers or a non-normal error distribution.
+Of these three models, model 3 has the lowest AIC. In the next section, we will evaluate the performance of these models to more determine which one is best for predicting the `target` variable.
 
-From the Shapiro-Wilk tests, we find that the p-values for all three models are much less than 0.05 which indicates that the residuals significantly deviate from a normal distribution. This is consistent with the observations from the Q-Q plots and suggests that the assumption of normality is violated for all three models. This violation is likely due to the presence of outliers or a heavy-tailed error distribution and we can likly continue with the models but we should be cautious when interpreting the results.
-
-## Select Models
+# Select Models
 
 ```{r}
 #| label: model-comparison-table
