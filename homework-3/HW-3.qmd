@@ -373,9 +373,12 @@ model_comparison <- imap_dfr(models_list, ~{
 }) |>
   arrange(`Deviance`)
 
-# Display the table
+# Transpose the data and convert to a data frame
+model_t <- as.data.frame(t(model_comparison))
+
+# 3. Display the table
 knitr::kable(
-  model_comparison, 
+  model_t, 
   digits = 4, 
   caption = "Evaluation of Candidate Models on Training Dataset"
 )
@@ -385,7 +388,7 @@ best_model_info <- model_comparison |> slice(1)
 best_model_obj <- models_list[[best_model_info$Model]]
 ```
 
-For the logistic models, we decided to use the deviance as our primary criterion on the training dataset, which was attained by the `r best_model_info$Model`. We've chosen deviance as our primary metric because it directly measures the goodness of fit for logistic regression models, with lower deviance indicating a better fit to the training data. Given our model results, each model had a fairly similar accuracy with our `r best_model_info$Model` having the highest accuracy of `r best_model_info$Accuracy`. It also had the lowest error rate of `r best_model_info$Error_Rate` and was comparable with the other top models in sensitivity and specificity. Overall, this model had the best balance of fit and predictive performance on the training data, which is why we selected it for further evaluation on the test set and for generating predictions on the evaluation set.
+For the logistic models, we decided to use the deviance as our primary criterion on the training dataset, which was attained by the `r best_model_info$Model`. We've chosen deviance as our primary metric because it directly measures the goodness of fit for logistic regression models, with lower deviance indicating a better fit to the training data. Given our model results, each model had a fairly similar accuracy with our `r best_model_info$Model` having the highest accuracy of `r round(best_model_info$Accuracy, 3)`. It also had the lowest error rate of `r round(best_model_info$Error_Rate, 3)` and was comparable with the other top models in sensitivity and specificity. Overall, this model had the best balance of fit and predictive performance on the training data, which is why we selected it for further evaluation on the test set and for generating predictions on the evaluation set.
 
 Given that our target variable was fairly balanced (49% of all observations had a target value of 1), and our accuracy, Precision, and Sensitivity show that we greatly outperform a random classifier, we are confident that our model is performing well.
 
