@@ -250,9 +250,94 @@ crime_test_split <- crime_clean[-train_indices, ]
 
 # Check assumptions for binary logistic regression
 
-::: callout-note
-To be added
-:::
+1. Binary Outcome 
+```{r}
+#| label: assumption-binary-outcome
+#| echo: true
+
+# Confirming that the target is binary
+crime_clean |>
+  count(target) |>
+  mutate(prop = n / sum(n))
+```
+
+The response variable "target" is confirmed to be a binary, therefore it takes two values ( 0: crime rate below the median) and (1: crime rate above the median). In the 466 neighborhoods in training data set 237 (50.9%) fall in the class of low crime and 228 (49.1)% are in the high crime neighborhood. There is no class imbalance, due to the near equal split meaning there is unlikely to be bias towards one class. 
+
+
+2. Independence of Observations 
+
+\vspace{0.5em}
+
+Each record in the dataset represents a distinct neighborhood, and there is no repeated-measures or clustered structure in the data. Therefore, the independence of observations assumption is satisfied by design and requires no further adjustment.
+
+
+3. No Multicollinearity (VIF Check)
+
+```{r}
+#| label: assumption-multicollinearity
+#| echo: true
+#| warning: false
+
+library(car)
+
+# Fit a reference logistic model with original predictors
+model_ref <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + tax + ptratio 
+                 + lstat + medv,
+                 data = crime_clean, family = binomial)
+
+# Compute VIF
+vif_vals <- vif(model_ref) |>
+  as.data.frame() |>
+  rownames_to_column("Variable") |>
+  rename(VIF = 2) |>
+  arrange(desc(VIF))
+
+vif_vals |> knitr::kable(caption = "Variance Inflation Factors for Reference Model")
+```
+
+The VIF values is calculated for all predictors to check for multicollinearity. A VIF above 10 is consided to be severe, while between 5 and 10 should warrant caution. None of the variable exceed a threshold of 10, indicating multicollinearity is not present.The highest VIF belongs to medv (median home value, VIF = 8.12), followed by rm (average rooms per dwelling, VIF = 5.81). 
+These two vairables are moderate and do not need requrie any removal. The remaining predictors  fall below 5 and are accetable levels of multicollinearity. There was strong pairwise correlction between "rad" and "tax" in the exploration section, howevr it is confirmed that multicollinearity does not exist in the dataset. 
+
+4. Linearity of Log-Odds (Box-Tidwell Test)
+
+```{r}
+#| label: assumption-linearity-log-odds
+#| echo: true
+#| warning: false
+
+# Box-Tidwell test: add interaction of each continuous predictor with its log
+# to test whether the log-odds relationship is linear
+continuous_vars <- c("zn", "indus", "nox", "rm", "age", "dis", "rad", "tax", 
+                     "ptratio", "lstat", "medv")
+
+# Create interaction terms x * log(x) for each continuous predictor
+# (use log1p to handle zeros)
+crime_bt <- crime_clean |>
+  mutate(across(all_of(continuous_vars), ~ . * log1p(.), .names = "{.col}_logx"))
+
+bt_formula <- as.formula(paste(
+  "target ~",
+  paste(continuous_vars, collapse = " + "),
+  "+",
+  paste(paste0(continuous_vars, "_logx"), collapse = " + ")
+))
+
+model_bt <- glm(bt_formula, data = crime_bt, family = binomial)
+
+# Extract p-values for the interaction terms only
+bt_results <- summary(model_bt)$coefficients |>
+  as.data.frame() |>
+  rownames_to_column("Term") |>
+  filter(str_detect(Term, "_logx")) |>
+  mutate(Variable = str_remove(Term, "_logx"),
+         Significant = `Pr(>|z|)` < 0.05) |>
+  select(Variable, Estimate, `Pr(>|z|)`, Significant) |>
+  mutate(across(where(is.numeric), ~ signif(., 3)))
+
+bt_results |> knitr::kable(caption = "Box-Tidwell Test for Linearity of Log-Odds")
+```
+
+The Box-Tidwell test was used to assess whether each continuous predictor has a linear relationship with the log-odds of the outcome. A p-value greater than 0.05 violate the assumption. There are three variables that were flagged as significant:rm (p = 0.003), dis (p < 0.001), and tax (p < 0.001). This indicates that these predictors do not have strict lienear relationship with log-odds of high crime. Log transformation were applied to these variables in the data preparation section in order to be used in the model building. The remaining eight predictors did not have any evidence of violating the linearity assumption. 
 
 # Build models
 
