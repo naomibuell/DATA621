@@ -27,24 +27,14 @@ header-includes:
 #| label: load-packages
 #| include: false
 
-# Check our current directory and change if necessary
-current_dir <- getwd()
-
-# Use grepl to see if './DATA621/' is in the current path
-if (grepl("DATA621", current_dir)) {
-  # Set the new directory
-  setwd("./homework-3/")
-  message("Changed directory to: ", getwd())
-} else {
-  message("Condition not met. Staying in: ", current_dir)
-}
-
 # Load necessary libraries
 library(tidyverse)
 library(skimr)
 library(corrplot)
 library(GGally)
 library(janitor)
+library(caret)
+library(pROC)
 ```
 
 # Introduction
@@ -338,46 +328,50 @@ Of these three models, model 3 has the lowest AIC. In the next section, we will 
 #| label: model-comparison-table
 #| echo: true
 #| results: asis
-#| eval: false
+#| eval: true
 
 # Creating a custom helper function to extract all the required metrics 
 # explicitly evaluating on the provided training dataset.
-get_model_metrics <- function(model, model_name, train_data) {
-  mod_summary <- summary(model)
+get_logistic_metrics <- function(model, model_name, data, target_var = "target") {
+  # 1. Get predicted probabilities and classes
+  probs <- predict(model, newdata = data, type = "response")
+  preds <- factor(ifelse(probs > 0.5, 1, 0), levels = c(0, 1))
+  actuals <- factor(data[[target_var]], levels = c(0, 1))
   
-  # Explicitly calculate Mean Squared Error (MSE) using the training data
-  predictions <- predict(model, newdata = train_data)
-  mse <- mean((train_data$TARGET_WINS - predictions)^2)
+  # 2. Generate Confusion Matrix and derived metrics
+  cm <- confusionMatrix(preds, actuals, positive = "1")
   
-  # Extract F-statistic and calculate its p-value (inherent to training data)
-  f_stat <- mod_summary$fstatistic
-  p_val <- if (!is.null(f_stat)) {
-    pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = FALSE)
-  } else {
-    NA
-  }
+  # 3. Calculate AUC
+  roc_obj <- roc(data[[target_var]], probs, quiet = TRUE)
+  auc_val <- as.numeric(pROC::auc(roc_obj))
   
-  # Return a nicely formatted row for our table
+  # 4. Return results as a tibble
   tibble(
     Model = model_name,
-    `Training MSE` = mse,
-    `R-Squared` = mod_summary$r.squared,
-    `Adj R-Squared` = mod_summary$adj.r.squared,
-    `F-Statistic` = f_stat[1],
-    `P-Value` = p_val,
-    `AIC` = AIC(model),
-    `BIC` = BIC(model)
+    Deviance = model$deviance,
+    Accuracy = cm$overall["Accuracy"],
+    Error_Rate = 1 - cm$overall["Accuracy"],
+    Precision = cm$byClass["Precision"],
+    Sensitivity = cm$byClass["Sensitivity"], # Also Recall
+    Specificity = cm$byClass["Specificity"],
+    F1 = cm$byClass["F1"],
+    AUC = auc_val,
+    AIC = AIC(model),
+    BIC = BIC(model)
   )
 }
 
+models_list <- list(
+  "All Untransformed Variables" = model1,
+  "Reducing Multicollinearity" = model2,
+  "Full Model with Backward Selection" = model_full
+)
+
 # Apply the function to all three models, explicitly passing the training split
-model_comparison <- bind_rows(
-  get_model_metrics(model_full, "Full Model", crime_train_split),
-  get_model_metrics(model_theory, "Theory Model", crime_train_split),
-  get_model_metrics(model_stepwise, "Stepwise Model", crime_train_split)
-) |>
-  # Sort by the lowest Training MSE 
-  arrange(`Training MSE`)
+model_comparison <- imap_dfr(models_list, ~{
+  get_logistic_metrics(.x, .y, crime_test_split)
+}) |>
+  arrange(`Deviance`)
 
 # Display the table
 knitr::kable(
@@ -385,23 +379,25 @@ knitr::kable(
   digits = 4, 
   caption = "Evaluation of Candidate Models on Training Dataset"
 )
+
+best_model_info <- model_comparison |> slice(1)
+
+best_model_obj <- models_list[[best_model_info$Model]]
 ```
 
-We favor a slightly more parsimonious model over a complex one with a marginally better R2. A simpler model (like our Stepwise or Theory model) is easier to interpret and less prone to overfitting. We will evaluate the models using Adjusted `R^2` and MSE on the training data, and then use the evaluation dataset to compare their predictive performance.
+For the logistic models, we decided to use the deviance as our primary criterion on the training dataset, which was attained by the `r best_model_info$Model`. We've chosen deviance as our primary metric because it directly measures the goodness of fit for logistic regression models, with lower deviance indicating a better fit to the training data. Given our model results, each model had a fairly similar accuracy with our `r best_model_info$Model` having the highest accuracy of `r best_model_info$Accuracy`. It also had the lowest error rate of `r best_model_info$Error_Rate` and was comparable with the other top models in sensitivity and specificity. Overall, this model had the best balance of fit and predictive performance on the training data, which is why we selected it for further evaluation on the test set and for generating predictions on the evaluation set.
 
-Looking at the table above, we can see that the Stepwise and Full models have similar MSE and Adjusted `R^2`, but the Stepwise model has fewer predictors making it a bit more parsimonious. Additionally, the Stepwise model is more interpretable and less prone to overfitting than the Full model. Additonally, the theory model has a much higher MSE and lower Adjusted `R^2` than the other two models, which suggests that baseball is more comoplex to predict wins with just the most correlated variables and the two new predictors. Therefore, **we select the Stepwise model as our final model for predicting `TARGET_WINS`**.
-
-Regarding the F-statistic, the highly significant p-value for the stepwise model's F-statistic (119.9) confirms that our selected group of predictors is collectively highly effective at explaining the variance in total team wins.
+Given that our target variable was fairly balanced (49% of all observations had a target value of 1), and our accuracy, Precision, and Sensitivity show that we greatly outperform a random classifier, we are confident that our model is performing well.
 
 ```{r}
 #| label: stepwise-model-summary
 #| echo: true
 #| eval: false
 # Display the summary of the selected Stepwise model to interpret coefficients and significance
-summary(model_stepwise)
+summary(best_model_obj)
 ```
 
-To make inferences from our Stepwise model, we can interpret the coefficients. For example, the coefficient for `TEAM_BATTING_H` is 0.05 which indicates that, all other things being equal, for every additional 20 hits a team records over a season, they're expected to gain about 1 additional win. Similarly, `TEAM_BATTING_BB` (i.e., walks) has a positive highly significant coefficient (0.03) which aligns with baseball theory that teams that walk more tend to win more.
+To make inferences from our top performing model, we can look at the significance of the predictors. The logistic regression model identifies several key environmental and structural factors that significantly predict whether a suburb's crime rate will exceed the median. The most dominant predictor is the concentration of nitrogen oxides (nox), where higher levels are strongly associated with a higher probability of the area being high-crime (z=4.670,p<0.001). Additionally, the pupil-teacher ratio (ptratio) and the proportion of older homes (age) built before 1940 are both significant positive predictors, suggesting that areas with crowded schools and aging infrastructure are more likely to see elevated crime rates. The model also highlights that as the distance to employment centers (log_dis) increases, so does the likelihood of high crime, along with a significant effect from the ratio of rooms to lower-status population (rm_lstat_ratio). Interestingly, many traditional economic indicators, such as median home values (medv), property tax rates (log_tax), and zoning for large lots (log_zn), did not reach statistical significance, indicating that in this specific dataset, industrial and demographic markers are more reliable indicators of crime than general wealth or proximity to the Charles River.
 
 # Results
 
@@ -410,31 +406,29 @@ To make inferences from our Stepwise model, we can interpret the coefficients. F
 #| echo: true
 #| eval: false
 # Generate predictions on the evaluation dataset using the selected model
-eval_predictions <- predict(model_stepwise, newdata = crime_eval_clean)
+eval_predictions <- predict(best_model_obj, newdata = crime_eval_clean, type = "response")
 
-# Bind the predictions back to the evaluation dataset for easy viewing
 crime_eval_results <- crime_eval_clean |>
-  # We round the predictions to the nearest whole number because a team 
-  # can't win a fraction of a baseball game
-  mutate(PREDICTED_TARGET_WINS = round(eval_predictions, 0)) |>
-  # Move the new prediction column to the front (right after INDEX) for easy reading
-  relocate(PREDICTED_TARGET_WINS, .after = INDEX)
+  mutate(
+    # If probability > 0.5, it's a 1 (high crime), otherwise 0
+    PREDICTED_TARGET = ifelse(eval_predictions > 0.5, 1, 0)
+  )
 
 # Write predictions to a csv
 write_csv(crime_eval_results, "crime_evaluation_predictions.csv")
 
 # Display the first 10 predictions in the rendered PDF
 knitr::kable(
-  head(crime_eval_results |> select(INDEX, PREDICTED_TARGET_WINS), 10),
+  head(crime_eval_results |> select(PREDICTED_TARGET), 10),
   caption = "Excerpts of Stepwise Model Win Predictions for Evaluation Set"
 )
 ```
 
-Given our evaluation set and our stepwise model, we are able to create predictions for the number of wins for the team in each year. The first 10 predictions are shown in the table above. We write these predictions to a CSV file for submission.
+Given our evaluation set and our stepwise model, we are able to create predictions on the evaluation set on which neighborhoods are classified as high-crime or low-crime. The first 10 predictions are shown in the table above. We write these predictions to a CSV file for submission.
 
 # Conclusion
 
-In conclusion, our stepwise model performed best in predicting the number of baseball wins based on the training data. Since there were some minor violations of assumptions, these results should be interpreted with caution, which may affect the reliability of our model. Future work could explore data transformations or alternative modeling approaches to address these assumption violations and potentially improve predictive performance.
+In conclusion, our `r best_model_info$Model` model, which was selected based on deviance and other performance metrics, demonstrates strong predictive capabilities for classifying neighborhoods as high-crime or low-crime based on a variety of environmental and structural factors. The significant predictors identified in the model provide valuable insights into the underlying drivers of crime in urban areas, highlighting the importance of air pollution, school crowding, aging infrastructure, and proximity to employment centers. These findings can inform policymakers and community leaders in their efforts to target interventions and allocate resources effectively to reduce crime rates. Future work could explore additional modeling techniques, such as regularization or ensemble methods, to further enhance predictive performance and interpretability.
 
 # Appendix A: R Code
 
