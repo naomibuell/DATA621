@@ -295,10 +295,11 @@ vif_vals <- vif(model_ref) |>
 vif_vals |> knitr::kable(caption = "Variance Inflation Factors for Reference Model")
 ```
 
-The VIF values is calculated for all predictors to check for multicollinearity. A VIF above 10 is consided to be severe, while between 5 and 10 should warrant caution. None of the variable exceed a threshold of 10, indicating multicollinearity is not present.The highest VIF belongs to medv (median home value, VIF = 8.12), followed by rm (average rooms per dwelling, VIF = 5.81). 
-These two vairables are moderate and do not need requrie any removal. The remaining predictors  fall below 5 and are accetable levels of multicollinearity. There was strong pairwise correlction between "rad" and "tax" in the exploration section, howevr it is confirmed that multicollinearity does not exist in the dataset. 
+The VIF values is calculated for all predictors to check for multicollinearity. A VIF above 10 is considered to be severe, while between 5 and 10 should warrant caution. None of the variable exceed a threshold of 10, indicating multicollinearity is not present.The highest VIF belongs to medv (median home value, VIF = 8.12), followed by rm (average rooms per dwelling, VIF = 5.81). 
+These two variables are moderate and do not need requrie any removal. The remaining predictors  fall below 5 and are acceptable levels of multicollinearity. There was strong pairwise correlation between "rad" and "tax" in the exploration section, howevr it is confirmed that multicollinearity does not exist in the dataset. 
 
 4. Linearity of Log-Odds (Box-Tidwell Test)
+
 
 ```{r}
 #| label: assumption-linearity-log-odds
