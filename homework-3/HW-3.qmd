@@ -27,6 +27,18 @@ header-includes:
 #| label: load-packages
 #| include: false
 
+# Check our current directory and change if necessary
+current_dir <- getwd()
+
+# Use grepl to see if './DATA621/' is in the current path
+if (grepl("DATA621", current_dir)) {
+  # Set the new directory
+  setwd("./homework-3/")
+  message("Changed directory to: ", getwd())
+} else {
+  message("Condition not met. Staying in: ", current_dir)
+}
+
 # Load necessary libraries
 library(tidyverse)
 library(skimr)
