@@ -39,38 +39,34 @@ library(pROC)
 
 # Introduction
 
-We build a binary logistic regression model on a data set containing information on crime for various neighborhoods of a major city to predict whether the neighborhood will be at risk for high crime levels. Each record in our data has a response variable indicating whether or not the crime rate is above the median crime rate or not. Our R statistical programming code is included in Appendix A.
+We model two outcomes in a auto insurance outcome variables: (1) whether the person was in a car crash (binary) and (2) the amount of money it will cost if the person does crash their car (continuous). Our objective is to build multiple linear regression and binary logistic regression models on the training data to predict the probability that a person will crash their car and also predict the cost of the crash if it occurs.
 
 # Data Exploration
 
-::: callout-note
-Data exploration section completed.
-:::
-
 ```{r}
 #| label: data-exploration
-#| include: false
+#| include: true
 
 # Load the training and evaluation datasets
-crime_train <- read_csv("./data/crime-training-data_modified.csv")
-crime_eval <- read_csv("./data/crime-evaluation-data_modified.csv")
+insurance_train <- read_csv("./data/insurance_training_data.csv")
+insurance_eval <- read_csv("./data/insurance-evaluation-data.csv")
 
 # Count rows and columns
-nrows <- crime_train |> nrow()
-ncols <- crime_train |> length()
+nrows <- insurance_train |> nrow()
+ncols <- insurance_train |> length()
 
 # Get missingness
-perc_complete <- round(crime_train |> n_complete() / nrows / ncols * 100, 2)
+perc_complete <- round(insurance_train |> n_complete() / nrows / ncols * 100, 2)
 ```
 
-The crime training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `target`, which represents whether the crime rate is above the median crime rate (1) or not (0). The other variables represent various information on crime for neighborhoods of a major city. See Appendix B for a full list of variable names and definitions. @tbl-summary-statistics presents descriptive characteristics of the training data.
+The insurance training data set contains `r nrows` rows and `r ncols` features, and is `r perc_complete` percent complete. 
 
 ```{r}
 #| label: tbl-summary-statistics
 #| tbl-cap: "Summary statistics for all variables in the training dataset"
 #| echo: false
 
-tbl_summ_stats <- crime_train |>
+tbl_summ_stats <- insurance_train |>
     skim_without_charts() |>
     janitor::clean_names() |>
     as_tibble() |>
@@ -83,6 +79,13 @@ tbl_summ_stats
 ```
 
 ```{r}
+changedFiles(
+    
+)```
+
+The target variables are `TARGET_FLAG`, which represents whether the person was in a car crash (1) or not (0), and `TARGET_AMT`, which represents the cost of the crash if it occurs. The other variables represent various information on auto insurance for different individuals. There are `r  @tbl-summary-statistics presents descriptive characteristics of the training data.
+
+```{r}
 #| label: fig-correlation-matrix
 #| fig-cap: "Correlation matrix of all variables in the training dataset"
 #| fig.align: "center"
@@ -90,12 +93,12 @@ tbl_summ_stats
 #| warning: false
 
 # Get correlation matrix
-crime_train_cor <- crime_train |>
+insurance_train_cor <- insurance_train |>
     cor(use = "pairwise.complete.obs")
 
-corrplot(crime_train_cor, method = "circle", type = "upper", tl.cex = .6, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = .5)
+corrplot(insurance_train_cor, method = "circle", type = "upper", tl.cex = .6, sig.level = 0.05, insig = "blank", addCoef.col = "black", number.cex = .5)
 
-most_corr_w_target <- crime_train_cor |>
+most_corr_w_target <- insurance_train_cor |>
     as.data.frame() |>
     rownames_to_column(var = "Variable") |>
     filter(Variable == "target") |>
