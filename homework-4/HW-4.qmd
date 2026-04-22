@@ -45,8 +45,6 @@ We model two outcomes in a auto insurance outcome variables: (1) whether the per
 
 # Data Exploration and Cleaning
 
-NOTE: Check for outliers. Measure skewness (age, prices, time). Check for missingness. Check VIF for multicollinearity. 
-
 ```{r}
 #| label: data-exploration
 #| warning: false
