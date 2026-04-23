@@ -1,6 +1,6 @@
 ---
-title: "Insurance"
-subtitle: "Homework #4"
+title: "Medicaid Expansion and Opioid Misuse Disorder in the US"
+subtitle: "Final Project"
 format: pdf
 author:
   - name: Naomi Buell
@@ -39,7 +39,54 @@ library(fastDummies)
 library(tidytable)
 ```
 
-# Introduction
+# Abstract (Naomi)
+*Use 250 words or less to summarize your problem, methodology, and major outcomes.*
+
+# Key words (Naomi)
+*Select a few key words (up to five) related to your work.*
+
+# Introduction (Naomi)
+*Describe the background and motivation of your problem.*
+
+# Literature review (Alex)
+*Discuss how other researchers have addressed similar problems, what their achievements are, and what the advantage and drawbacks of each reviewed approach are. Explain how your investigation is similar or different to the state-of-the- art. Please cite the relevant papers where appropriate.*
+
+# Methodology
+*Discuss the key aspects of your problem, data set and regression model(s). Given that you are working on real-world data, explain at a high-level your exploratory data analysis, how you prepared the data for regression modeling, your process for building regression models, and your model selection.*
+
+## Exploratory Data Analysis methods (Naomi)
+
+## Data Preparation methods (Nana)
+
+## Build models methods ()
+
+## Select models methods ()
+
+# Experimentation and Results
+*Describe the specifics of what you did (data exploration, data preparation, model building, model selection, model evaluation, etc.), and what you found out (statistical analyses, interpretation and discussion of the results, etc.).*
+
+## Exploratory Data Analysis Results (Naomi)
+
+## Results of Data Preparation (Nana)
+
+## Results of Building models ()
+
+## Results of model selection ()
+
+# Discussion and Conclusions ()
+*Conclude your findings, limitations, and suggest areas for future work.*
+
+
+
+
+
+
+
+
+
+
+
+
 
 We model two outcomes in a auto insurance outcome variables: (1) whether the person was in a car crash (binary) and (2) the amount of money it will cost if the person does crash their car (continuous). Our objective is to build multiple linear regression and binary logistic regression models on the training data to predict the probability that a person will crash their car and also predict the cost of the crash if it occurs.
 
