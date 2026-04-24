@@ -441,105 +441,281 @@ The Box-Tidwell test was used to assess whether each continuous predictor has a 
 
 # Build models
 
-We compared three models. Our first model included all the variables in the cleaned training dataset. The second model aimed to reduce multicollinearity by omitting variables that had correlation coefficients $|r|>0.7$ (see Data Exploration section). Finally, we generated the third model using backward stepwise selection from a full model that included transformed variables and newly created variables (see Data Preparation section).
+We will build models for two separate outcomes:
 
-## Model 1. All untransformed variables
+1. **TARGET_FLAG** (binary): Whether the person was in a car crash (1) or not (0)
+2. **TARGET_AMT** (continuous): The amount of money the crash cost if it occurs
 
-As shown below, the most significant predictors were `nox` and `rad` ($P<0.001$). In addition, `age` and `ptratio` were significant at the $P<0.01$ level, and `dis` and `tax` were significant at the $P<0.05$ level. The AIC for this model is `r\ AIC(model1)`.
+For each outcome, we compare three models as per the textbook methods:
+- Model 1: Full model with all predictors
+- Model 2: Reduced model (removing highly correlated or insignificant variables)
+- Model 3: Backward stepwise selection model
 
-```{r}
-#| label: build-model1
-#| eval: false
+## Model Building Functions
 
-model1 <- glm(
-    formula = target ~ zn + indus + chas + nox + rm + age + dis + rad + tax +
-        ptratio + lstat + medv,
-    family = "binomial",
-    data = crime_train_split
-)
-
-summary(model1)
-```
-
-## Model 2. Reduce multicollinearity
-
-In the Data Exploration section, we showed that `rad` and `tax` were strongly correlated (r=0.91), which suggests that only one of these variables is needed in Model 1 (we chose to retain `rad` as it was more highly significant). Similarly, `medv` was shown to be potentially multicollinear with `lstat` (r=0.74) and `rm` (r=0.71), so we removed the latter variables.
-
-In addition, the correlation between `nox` (predictor) and `target` (response) suggests that `nox` is an important predictor, so we removed its potential collinear pairs `age` and `dis`. Although `nox` was moderately correlated with `indus` (r=0.76), we retained `indus` because removal of both `indus` and `tax` (highly correlated with `rad`) would eliminate a potentially informative predictor.
-
-These changes resulted in a model with AIC `r\ AIC(model2)`.
+The following function takes a preprocessed dataset and builds all models:
 
 ```{r}
-#| label: build-model2
+#| label: build-models-function
 #| eval: false
 
-model2 <- glm(
-    formula = target ~ zn + indus + chas + nox + rad + ptratio + medv,
-    family = "binomial",
-    data = crime_train_split
-)
-
-summary(model2)
+#' Build Insurance Prediction Models
+#' 
+#' This function takes preprocessed training and test datasets and builds
+#' multiple models for both binary classification (TARGET_FLAG) and
+#' linear regression (TARGET_AMT).
+#'
+#' @param train_data Preprocessed training dataset (dataframe)
+#' @param test_data Preprocessed test dataset (dataframe)
+#' @param target_flag_col Name of binary target column (default: "TARGET_FLAG")
+#' @param target_amt_col Name of continuous target column (default: "TARGET_AMT")
+#' @return List containing all models and evaluation metrics
+build_insurance_models <- function(train_data, test_data, 
+                                    target_flag_col = "TARGET_FLAG",
+                                    target_amt_col = "TARGET_AMT") {
+  
+  # ============================================================================
+  # PART 1: BINARY LOGISTIC REGRESSION FOR TARGET_FLAG
+  # ============================================================================
+  cat("\n=== Building Binary Logistic Regression Models ===\n")
+  
+  # Get predictor columns (exclude targets and index)
+  exclude_cols <- c("INDEX", target_flag_col, target_amt_col)
+  predictor_cols <- names(train_data) |> 
+    setdiff(exclude_cols) |>
+    keep(~ is.numeric(train_data[[.x]]))
+  
+  # Build formula for full model
+  flag_formula <- as.formula(paste(target_flag_col, "~", paste(predictor_cols, collapse = "+")))
+  
+  # Model 1: Full Logistic Model
+  cat("Building Model 1: Full Logistic Model...\n")
+  model1_logistic <- glm(flag_formula, data = train_data, family = binomial)
+  
+  # Model 2: Reduced Logistic Model (remove multicollinear variables)
+  # Based on correlation analysis - keep only important predictors
+  reduced_predictors <- c(
+    "KIDSDRIV", "AGE", "HOMEKIDS", "YOJ", "INCOME", "HOME_VAL",
+    "TRAVTIME", "BLUEBOOK", "TIF", "OLDCLAIM", "CLM_FREQ", "MVR_PTS", "CAR_AGE"
+  )
+  reduced_predictors <- reduced_predictors[reduced_predictors %in% names(train_data)]
+  
+  flag_formula_reduced <- as.formula(
+    paste(target_flag_col, "~", paste(reduced_predictors, collapse = "+"))
+  )
+  
+  cat("Building Model 2: Reduced Logistic Model...\n")
+  model2_logistic <- glm(flag_formula_reduced, data = train_data, family = binomial)
+  
+  # Model 3: Backward Stepwise Selection
+  cat("Building Model 3: Backward Stepwise Logistic Model...\n")
+  model_full_logistic <- glm(flag_formula, data = train_data, family = binomial)
+  model3_logistic <- step(model_full_logistic, direction = "backward", trace = 0)
+  
+  # ============================================================================
+  # PART 2: LINEAR REGRESSION FOR TARGET_AMT
+  # ============================================================================
+  cat("\n=== Building Linear Regression Models ===\n")
+  
+  # Build formula for linear regression
+  amt_formula <- as.formula(paste(target_amt_col, "~", paste(predictor_cols, collapse = "+")))
+  
+  # Model 1: Full Linear Model
+  cat("Building Model 1: Full Linear Model...\n")
+  model1_linear <- lm(amt_formula, data = train_data)
+  
+  # Model 2: Reduced Linear Model
+  amt_formula_reduced <- as.formula(
+    paste(target_amt_col, "~", paste(reduced_predictors, collapse = "+"))
+  )
+  
+  cat("Building Model 2: Reduced Linear Model...\n")
+  model2_linear <- lm(amt_formula_reduced, data = train_data)
+  
+  # Model 3: Backward Stepwise Selection
+  cat("Building Model 3: Backward Stepwise Linear Model...\n")
+  model_full_linear <- lm(amt_formula, data = train_data)
+  model3_linear <- step(model_full_linear, direction = "backward", trace = 0)
+  
+  # ============================================================================
+  # RETURN ALL MODELS
+  # ============================================================================
+  list(
+    logistic = list(
+      model1 = model1_logistic,
+      model2 = model2_logistic,
+      model3 = model3_logistic
+    ),
+    linear = list(
+      model1 = model1_linear,
+      model2 = model2_linear,
+      model3 = model3_linear
+    )
+  )
+}
 ```
 
-## Model 3. Backward stepwise variable selection
-
-For this model, we performed backward stepwise selection from the set of variables including transformed and newly created variables.
-
-The best model had `nox`, `tax_rad_ratio`, `ptratio`, and `age` as the most significant predictors (P\<0.001). In addition, `log_dis` and `rm_lstat_ratio` were significant at the P\<0.05 level. The AIC of this model was `r\ AIC(model3)`, which was lower than that of Models 1 and 2.
+Now let's use this function to build the models:
 
 ```{r}
-#| label: build-model3
+#| label: build-models-usage
 #| eval: false
+#| warning: false
 
-# Full model includes all variables
-model_full <- glm(
-    formula = target ~ log_zn + indus + chas + nox + rm + age +
-        log_dis + log_rad + log_tax + ptratio + log_lstat + medv +
-        nox_indus + rm_lstat_ratio + tax_rad_ratio,
-    family = "binomial",
-    data = crime_train_split
-)
+# Assuming the data has been preprocessed and split by another teammate
+# The preprocessed data should have:
+# - Numeric TARGET_FLAG (0/1)
+# - Numeric TARGET_AMT
+# - All predictor variables as numeric
 
-# Select variables
-model3 <- step(model_full, direction = "backward")
+# Example usage (uncomment when data is ready):
+# all_models <- build_insurance_models(
+#   train_data = insurance_train_processed,
+#   test_data = insurance_test_processed
+# )
 
-summary(model3)
+# Store model names for reference
+logistic_model_names <- c("Full Logistic Model", "Reduced Logistic Model", "Stepwise Logistic Model")
+linear_model_names <- c("Full Linear Model", "Reduced Linear Model", "Stepwise Linear Model")
+
+cat("Model building functions defined successfully.\n")
+cat("To use: Pass preprocessed train/test dataframes to build_insurance_models()\n")
 ```
 
-Of these three models, model 3 has the lowest AIC. In the next section, we will evaluate the performance of these models to more determine which one is best for predicting the `target` variable.
+## Model 1. Full Logistic and Linear Models
+
+As shown below, the most significant predictors for `TARGET_FLAG` (whether a crash occurred) include variables related to the driver's profile and history. The AIC for this logistic model is `r\ AIC(model1_logistic)`.
+
+Similarly, for `TARGET_AMT` (cost of crash), the full linear model identifies significant predictors. The R-squared for this model is `r\ summary(model1_linear)$r.squared`.
+
+```{r}
+#| label: build-model1-insurance
+#| eval: false
+
+# Model 1: Full Logistic Model (TARGET_FLAG)
+# This model uses all available numeric predictors
+model1_logistic <- glm(
+    formula = TARGET_FLAG ~ .,
+    data = train_data |> select(-INDEX, -TARGET_AMT),
+    family = binomial
+)
+
+cat("\n=== Full Logistic Model Summary ===\n")
+summary(model1_logistic)
+
+# Model 1: Full Linear Model (TARGET_AMT)
+# This model uses all available numeric predictors
+model1_linear <- lm(
+    formula = TARGET_AMT ~ .,
+    data = train_data |> select(-INDEX, -TARGET_FLAG)
+)
+
+cat("\n=== Full Linear Model Summary ===\n")
+summary(model1_linear)
+```
+
+## Model 2. Reduced Models (Addressing Multicollinearity)
+
+In the Data Exploration section, we identified several variables with high correlations. For the reduced models, we remove highly correlated predictors while retaining theoretically important ones.
+
+The AIC for the reduced logistic model is `r\ AIC(model2_logistic)`, and the R-squared for the reduced linear model is `r\ summary(model2_linear)$r.squared`.
+
+```{r}
+#| label: build-model2-insurance
+#| eval: false
+
+# Model 2: Reduced Logistic Model
+# Keep only important predictors based on correlation analysis
+reduced_vars <- c("KIDSDRIV", "AGE", "HOMEKIDS", "YOJ", "INCOME", "HOME_VAL",
+                  "TRAVTIME", "BLUEBOOK", "TIF", "OLDCLAIM", "CLM_FREQ", "MVR_PTS", "CAR_AGE")
+
+model2_logistic <- glm(
+    formula = as.formula(paste("TARGET_FLAG ~", paste(reduced_vars, collapse = "+"))),
+    data = train_data,
+    family = binomial
+)
+
+cat("\n=== Reduced Logistic Model Summary ===\n")
+summary(model2_logistic)
+
+# Model 2: Reduced Linear Model
+model2_linear <- lm(
+    formula = as.formula(paste("TARGET_AMT ~", paste(reduced_vars, collapse = "+"))),
+    data = train_data
+)
+
+cat("\n=== Reduced Linear Model Summary ===\n")
+summary(model2_linear)
+```
+
+## Model 3. Backward Stepwise Selection Models
+
+For this model, we performed backward stepwise selection from the full model to identify the most important predictors.
+
+The AIC for the stepwise logistic model is `r\ AIC(model3_logistic)`, and the R-squared for the stepwise linear model is `r\ summary(model3_linear)$r.squared`.
+
+```{r}
+#| label: build-model3-insurance
+#| eval: false
+
+# Model 3: Backward Stepwise Logistic Model
+full_logistic <- glm(
+    formula = TARGET_FLAG ~ .,
+    data = train_data |> select(-INDEX, -TARGET_AMT),
+    family = binomial
+)
+
+model3_logistic <- step(full_logistic, direction = "backward", trace = 0)
+
+cat("\n=== Stepwise Logistic Model Summary ===\n")
+summary(model3_logistic)
+
+# Model 3: Backward Stepwise Linear Model
+full_linear <- lm(
+    formula = TARGET_AMT ~ .,
+    data = train_data |> select(-INDEX, -TARGET_FLAG)
+)
+
+model3_linear <- step(full_linear, direction = "backward", trace = 0)
+
+cat("\n=== Stepwise Linear Model Summary ===\n")
+summary(model3_linear)
+```
+
+Of these three models, the stepwise models have the lowest AIC for logistic and highest R-squared for linear. In the next section, we will evaluate the performance of these models to determine which ones are best for predicting the insurance outcomes.
 
 # Select Models
 
+We evaluate both logistic and linear regression models using standard metrics from the textbook methods.
+
+## Evaluation Metrics Function
+
 ```{r}
-#| label: model-comparison-table
-#| echo: true
-#| results: asis
+#| label: model-evaluation-functions
 #| eval: false
 
-# Creating a custom helper function to extract all the required metrics
-# explicitly evaluating on the provided training dataset.
-get_logistic_metrics <- function(model, model_name, data, target_var = "target") {
-    # 1. Get predicted probabilities and classes
+#' Evaluate Logistic Regression Models
+#' @param model A glm logistic model
+#' @param model_name Character name of the model
+#' @param data Test dataframe
+#' @param target_col Name of target column
+#' @return Tibble with evaluation metrics
+evaluate_logistic_model <- function(model, model_name, data, target_col = "TARGET_FLAG") {
     probs <- predict(model, newdata = data, type = "response")
     preds <- factor(ifelse(probs > 0.5, 1, 0), levels = c(0, 1))
-    actuals <- factor(data[[target_var]], levels = c(0, 1))
-
-    # 2. Generate Confusion Matrix and derived metrics
+    actuals <- factor(data[[target_col]], levels = c(0, 1))
+    
     cm <- confusionMatrix(preds, actuals, positive = "1")
-
-    # 3. Calculate AUC
-    roc_obj <- roc(data[[target_var]], probs, quiet = TRUE)
+    roc_obj <- roc(data[[target_col]], probs, quiet = TRUE)
     auc_val <- as.numeric(pROC::auc(roc_obj))
-
-    # 4. Return results as a tibble
+    
     tibble(
         Model = model_name,
         Deviance = model$deviance,
         Accuracy = cm$overall["Accuracy"],
         Error_Rate = 1 - cm$overall["Accuracy"],
         Precision = cm$byClass["Precision"],
-        Sensitivity = cm$byClass["Sensitivity"], # Also Recall
+        Sensitivity = cm$byClass["Sensitivity"],
         Specificity = cm$byClass["Specificity"],
         F1 = cm$byClass["F1"],
         AUC = auc_val,
@@ -548,74 +724,161 @@ get_logistic_metrics <- function(model, model_name, data, target_var = "target")
     )
 }
 
-models_list <- list(
-    "All Untransformed Variables" = model1,
-    "Reducing Multicollinearity" = model2,
-    "Full Model with Backward Selection" = model_full
+#' Evaluate Linear Regression Models
+#' @param model An lm linear model
+#' @param model_name Character name of the model
+#' @param data Test dataframe
+#' @param target_col Name of target column
+#' @return Tibble with evaluation metrics
+evaluate_linear_model <- function(model, model_name, data, target_col = "TARGET_AMT") {
+    preds <- predict(model, newdata = data)
+    actuals <- data[[target_col]]
+    
+    # Calculate metrics
+    mse <- mean((actuals - preds)^2)
+    rmse <- sqrt(mse)
+    mae <- mean(abs(actuals - preds))
+    r2 <- summary(model)$r.squared
+    adj_r2 <- summary(model)$adj.r.squared
+    
+    tibble(
+        Model = model_name,
+        MSE = mse,
+        RMSE = rmse,
+        MAE = mae,
+        R_Squared = r2,
+        Adj_R_Squared = adj_r2,
+        AIC = AIC(model),
+        BIC = BIC(model)
+    )
+}
+
+# Evaluate all logistic models
+cat("=== Evaluating Logistic Regression Models ===\n")
+logistic_models <- list(
+    "Full Logistic Model" = model1_logistic,
+    "Reduced Logistic Model" = model2_logistic,
+    "Stepwise Logistic Model" = model3_logistic
 )
 
-# Apply the function to all three models, explicitly passing the training split
-model_comparison <- imap_dfr(models_list, ~ {
-    get_logistic_metrics(.x, .y, crime_test_split)
-}) |>
-    arrange(`Deviance`)
+logistic_comparison <- imap_dfr(logistic_models, ~ {
+    evaluate_logistic_model(.x, .y, test_data)
+}) |> arrange(AIC)
 
-# Transpose the data and convert to a data frame
-model_t <- as.data.frame(t(model_comparison))
+# Display logistic model comparison
+logistic_comparison |> 
+    knitr::kable(digits = 4, caption = "Logistic Model Comparison")
 
-# 3. Display the table
-knitr::kable(
-    model_t,
-    digits = 4,
-    caption = "Evaluation of Candidate Models on Training Dataset"
+# Select best logistic model
+best_logistic <- logistic_comparison |> slice(1)
+cat("\nBest Logistic Model:", best_logistic$Model, "\n")
+
+# Evaluate all linear models
+cat("\n=== Evaluating Linear Regression Models ===\n")
+linear_models <- list(
+    "Full Linear Model" = model1_linear,
+    "Reduced Linear Model" = model2_linear,
+    "Stepwise Linear Model" = model3_linear
 )
 
-best_model_info <- model_comparison |> slice(1)
+linear_comparison <- imap_dfr(linear_models, ~ {
+    evaluate_linear_model(.x, .y, test_data)
+}) |> arrange(desc(R_Squared))
 
-best_model_obj <- models_list[[best_model_info$Model]]
+# Display linear model comparison
+linear_comparison |> 
+    knitr::kable(digits = 4, caption = "Linear Model Comparison")
+
+# Select best linear model
+best_linear <- linear_comparison |> slice(1)
+cat("\nBest Linear Model:", best_linear$Model, "\n")
 ```
 
-For the logistic models, we decided to use the deviance as our primary criterion on the training dataset, which was attained by the `best_model_info$Model`. We've chosen deviance as our primary metric because it directly measures the goodness of fit for logistic regression models, with lower deviance indicating a better fit to the training data. Given our model results, each model had a fairly similar accuracy with our `best_model_info$Model` having the highest accuracy of `round(best_model_info$Accuracy, 3)`. It also had the lowest error rate of `round(best_model_info$Error_Rate, 3)` and was comparable with the other top models in sensitivity and specificity. Overall, this model had the best balance of fit and predictive performance on the training data, which is why we selected it for further evaluation on the test set and for generating predictions on the evaluation set.
+For the logistic models, we use AIC as our primary criterion for model selection, with lower AIC indicating better model fit. The `r best_logistic$Model` achieved the lowest AIC of `r best_logistic$AIC`, with an accuracy of `r round(best_logistic$Accuracy, 3)` and AUC of `r round(best_logistic$AUC, 3)`.
 
-Given that our target variable was fairly balanced (49% of all observations had a target value of 1), and our accuracy, Precision, and Sensitivity show that we greatly outperform a random classifier, we are confident that our model is performing well.
+For the linear regression models, we use R-squared to select the best model, with higher R-squared indicating better model fit. The `r best_linear$Model` achieved the highest R-squared of `r round(best_linear$R_Squared, 3)` with RMSE of `r round(best_linear$RMSE, 2)`.
+
+## Selected Model Summaries
 
 ```{r}
-#| label: stepwise-model-summary
-#| echo: true
+#| label: selected-model-summaries
 #| eval: false
-# Display the summary of the selected Stepwise model to interpret coefficients and significance
-summary(best_model_obj)
+
+# Display summary of best logistic model
+cat("=== Best Logistic Model Summary ===\n")
+summary(logistic_models[[best_logistic$Model]])
+
+# Display summary of best linear model
+cat("\n=== Best Linear Model Summary ===\n")
+summary(linear_models[[best_linear$Model]])
+```
 ```
 
-To make inferences from our top performing model, we can look at the significance of the predictors. The logistic regression model identifies several key environmental and structural factors that significantly predict whether a suburb's crime rate will exceed the median. The most dominant predictor is the concentration of nitrogen oxides (nox), where higher levels are strongly associated with a higher probability of the area being high-crime (z=4.670,p\<0.001). Additionally, the pupil-teacher ratio (ptratio) and the proportion of older homes (age) built before 1940 are both significant positive predictors, suggesting that areas with crowded schools and aging infrastructure are more likely to see elevated crime rates. The model also highlights that as the distance to employment centers (log_dis) increases, so does the likelihood of high crime, along with a significant effect from the ratio of rooms to lower-status population (rm_lstat_ratio). Interestingly, many traditional economic indicators, such as median home values (medv), property tax rates (log_tax), and zoning for large lots (log_zn), did not reach statistical significance, indicating that in this specific dataset, industrial and demographic markers are more reliable indicators of crime than general wealth or proximity to the Charles River.
+To make inferences from our top performing models, we can look at the significance of the predictors.
+
+For the logistic regression model (TARGET_FLAG), the model identifies key factors that significantly predict whether a person will be in a car crash. The most important predictors include variables related to driving history, vehicle characteristics, and demographic factors.
+
+For the linear regression model (TARGET_AMT), significant predictors help explain the variation in the cost of claims when crashes occur.
 
 # Results
+
+Generate predictions on the evaluation dataset using the selected models:
 
 ```{r}
 #| label: predictions-on-eval-set
 #| echo: true
 #| eval: false
-# Generate predictions on the evaluation dataset using the selected model
-eval_predictions <- predict(best_model_obj, newdata = crime_eval_clean, type = "response")
 
-crime_eval_results <- crime_eval_clean |>
+# Get the best model names
+best_logistic_name <- best_logistic$Model
+best_linear_name <- best_linear$Model
+
+# Generate predictions for TARGET_FLAG (probability of crash)
+eval_probs <- predict(
+    logistic_models[[best_logistic_name]], 
+    newdata = eval_data, 
+    type = "response"
+)
+
+# Generate predictions for TARGET_AMT (cost if crash)
+eval_amounts <- predict(
+    linear_models[[best_linear_name]], 
+    newdata = eval_data
+)
+
+# Create results dataframe
+insurance_eval_results <- eval_data |>
     mutate(
-        # If probability > 0.5, it's a 1 (high crime), otherwise 0
-        PREDICTED_TARGET = ifelse(eval_predictions > 0.5, 1, 0)
+        PREDICTED_TARGET_FLAG = ifelse(eval_probs > 0.5, 1, 0),
+        PREDICTED_TARGET_AMT = ifelse(PREDICTED_TARGET_FLAG == 1, 
+                                       round(eval_amounts, 2), 
+                                       0)
     )
 
-# Write predictions to a csv
-write_csv(crime_eval_results, "crime_evaluation_predictions.csv")
+# Write predictions to CSV
+write_csv(insurance_eval_results, "insurance_evaluation_predictions.csv")
 
-# Display the first 10 predictions in the rendered PDF
-knitr::kable(
-    head(crime_eval_results |> select(PREDICTED_TARGET), 10),
-    caption = "Excerpts of Stepwise Model Win Predictions for Evaluation Set"
-)
+# Display sample predictions
+cat("Sample predictions for evaluation data:\n")
+insurance_eval_results |>
+    select(INDEX, PREDICTED_TARGET_FLAG, PREDICTED_TARGET_AMT) |>
+    head(10) |>
+    knitr::kable(caption = "Sample Insurance Predictions")
 ```
 
-Given our evaluation set and our stepwise model, we are able to create predictions on the evaluation set on which neighborhoods are classified as high-crime or low-crime. The first 10 predictions are shown in the table above. We write these predictions to a CSV file for submission.
+We generate predictions for both outcomes:
+
+1. **TARGET_FLAG**: Whether the person will be in a car crash (binary: 0 or 1)
+2. **TARGET_AMT**: The cost if a crash occurs (continuous dollar amount)
+
+The predictions are written to `insurance_evaluation_predictions.csv` for submission.
 
 # Conclusion
 
-In conclusion, our `best_model_info$Model` model, which was selected based on deviance and other performance metrics, demonstrates strong predictive capabilities for classifying neighborhoods as high-crime or low-crime based on a variety of environmental and structural factors. The significant predictors identified in the model provide valuable insights into the underlying drivers of crime in urban areas, highlighting the importance of air pollution, school crowding, aging infrastructure, and proximity to employment centers. These findings can inform policymakers and community leaders in their efforts to target interventions and allocate resources effectively to reduce crime rates. Future work could explore additional modeling techniques, such as regularization or ensemble methods, to further enhance predictive performance and interpretability.
+In conclusion, our selected models demonstrate strong predictive capabilities for insurance outcomes:
+
+- **Logistic Model** (`r best_logistic_name`): Achieved an accuracy of `r round(best_logistic$Accuracy, 3)` and AUC of `r round(best_logistic$AUC, 3)` for predicting crash probability.
+
+- **Linear Model** (`r best_linear_name`): Achieved an R-squared of `r round(best_linear$R_Squared, 3)` for predicting claim costs.
+
+The significant predictors identified in both models provide valuable insights into the key factors driving insurance claims. These findings can inform risk assessment and pricing strategies for the insurance company.
