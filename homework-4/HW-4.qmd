@@ -346,24 +346,22 @@ sum(is.na(insurance_train_prepared))
 sum(is.na(insurance_eval_prepared))
 ```
 
-
-### Linearity Assumption Summary
-
-The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
-
 ## Data Splits
 
 First, we will split our dataset into a training and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
 
 ```{r}
 #| label: split-data
-#| eval: false
 
 set.seed(19940211)
-train_indices <- sample(nrow(crime_clean), size = 0.8 * nrow(crime_clean))
-crime_train_split <- crime_clean[train_indices, ]
-crime_test_split <- crime_clean[-train_indices, ]
+train_indices <- sample(nrow(insurance_train_prepared), size = 0.8 * nrow(insurance_train_prepared))
+insurance_train_split <- insurance_train_prepared[train_indices, ]
+insurance_test_split <- insurance_train_prepared[-train_indices, ]
 ```
+
+### Linearity Assumption Summary
+
+The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
 
 # Check assumptions for binary logistic regression
 
@@ -468,171 +466,39 @@ The Box-Tidwell test was used to assess whether each continuous predictor has a 
 
 We will build models for two separate outcomes:
 
-1. **TARGET_FLAG** (binary): Whether the person was in a car crash (1) or not (0)
-2. **TARGET_AMT** (continuous): The amount of money the crash cost if it occurs
+1. **target_flag** (binary): Whether the person was in a car crash (1) or not (0)
+2. **target_amt** (continuous): The amount of money the crash cost if it occurs
 
 For each outcome, we compare three models as per the textbook methods:
 - Model 1: Full model with all predictors
 - Model 2: Reduced model (removing highly correlated or insignificant variables)
 - Model 3: Backward stepwise selection model
 
-## Model Building Functions
-
-The following function takes a preprocessed dataset and builds all models:
-
-```{r}
-#| label: build-models-function
-#| eval: false
-
-#' Build Insurance Prediction Models
-#' 
-#' This function takes preprocessed training and test datasets and builds
-#' multiple models for both binary classification (TARGET_FLAG) and
-#' linear regression (TARGET_AMT).
-#'
-#' @param train_data Preprocessed training dataset (dataframe)
-#' @param test_data Preprocessed test dataset (dataframe)
-#' @param target_flag_col Name of binary target column (default: "TARGET_FLAG")
-#' @param target_amt_col Name of continuous target column (default: "TARGET_AMT")
-#' @return List containing all models and evaluation metrics
-build_insurance_models <- function(train_data, test_data, 
-                                    target_flag_col = "TARGET_FLAG",
-                                    target_amt_col = "TARGET_AMT") {
-  
-  # ============================================================================
-  # PART 1: BINARY LOGISTIC REGRESSION FOR TARGET_FLAG
-  # ============================================================================
-  cat("\n=== Building Binary Logistic Regression Models ===\n")
-  
-  # Get predictor columns (exclude targets and index)
-  exclude_cols <- c("INDEX", target_flag_col, target_amt_col)
-  predictor_cols <- names(train_data) |> 
-    setdiff(exclude_cols) |>
-    keep(~ is.numeric(train_data[[.x]]))
-  
-  # Build formula for full model
-  flag_formula <- as.formula(paste(target_flag_col, "~", paste(predictor_cols, collapse = "+")))
-  
-  # Model 1: Full Logistic Model
-  cat("Building Model 1: Full Logistic Model...\n")
-  model1_logistic <- glm(flag_formula, data = train_data, family = binomial)
-  
-  # Model 2: Reduced Logistic Model (remove multicollinear variables)
-  # Based on correlation analysis - keep only important predictors
-  reduced_predictors <- c(
-    "KIDSDRIV", "AGE", "HOMEKIDS", "YOJ", "INCOME", "HOME_VAL",
-    "TRAVTIME", "BLUEBOOK", "TIF", "OLDCLAIM", "CLM_FREQ", "MVR_PTS", "CAR_AGE"
-  )
-  reduced_predictors <- reduced_predictors[reduced_predictors %in% names(train_data)]
-  
-  flag_formula_reduced <- as.formula(
-    paste(target_flag_col, "~", paste(reduced_predictors, collapse = "+"))
-  )
-  
-  cat("Building Model 2: Reduced Logistic Model...\n")
-  model2_logistic <- glm(flag_formula_reduced, data = train_data, family = binomial)
-  
-  # Model 3: Backward Stepwise Selection
-  cat("Building Model 3: Backward Stepwise Logistic Model...\n")
-  model_full_logistic <- glm(flag_formula, data = train_data, family = binomial)
-  model3_logistic <- step(model_full_logistic, direction = "backward", trace = 0)
-  
-  # ============================================================================
-  # PART 2: LINEAR REGRESSION FOR TARGET_AMT
-  # ============================================================================
-  cat("\n=== Building Linear Regression Models ===\n")
-  
-  # Build formula for linear regression
-  amt_formula <- as.formula(paste(target_amt_col, "~", paste(predictor_cols, collapse = "+")))
-  
-  # Model 1: Full Linear Model
-  cat("Building Model 1: Full Linear Model...\n")
-  model1_linear <- lm(amt_formula, data = train_data)
-  
-  # Model 2: Reduced Linear Model
-  amt_formula_reduced <- as.formula(
-    paste(target_amt_col, "~", paste(reduced_predictors, collapse = "+"))
-  )
-  
-  cat("Building Model 2: Reduced Linear Model...\n")
-  model2_linear <- lm(amt_formula_reduced, data = train_data)
-  
-  # Model 3: Backward Stepwise Selection
-  cat("Building Model 3: Backward Stepwise Linear Model...\n")
-  model_full_linear <- lm(amt_formula, data = train_data)
-  model3_linear <- step(model_full_linear, direction = "backward", trace = 0)
-  
-  # ============================================================================
-  # RETURN ALL MODELS
-  # ============================================================================
-  list(
-    logistic = list(
-      model1 = model1_logistic,
-      model2 = model2_logistic,
-      model3 = model3_logistic
-    ),
-    linear = list(
-      model1 = model1_linear,
-      model2 = model2_linear,
-      model3 = model3_linear
-    )
-  )
-}
-```
-
-Now let's use this function to build the models:
-
-```{r}
-#| label: build-models-usage
-#| eval: false
-#| warning: false
-
-# Assuming the data has been preprocessed and split by another teammate
-# The preprocessed data should have:
-# - Numeric TARGET_FLAG (0/1)
-# - Numeric TARGET_AMT
-# - All predictor variables as numeric
-
-# Example usage (uncomment when data is ready):
-# all_models <- build_insurance_models(
-#   train_data = insurance_train_processed,
-#   test_data = insurance_test_processed
-# )
-
-# Store model names for reference
-logistic_model_names <- c("Full Logistic Model", "Reduced Logistic Model", "Stepwise Logistic Model")
-linear_model_names <- c("Full Linear Model", "Reduced Linear Model", "Stepwise Linear Model")
-
-cat("Model building functions defined successfully.\n")
-cat("To use: Pass preprocessed train/test dataframes to build_insurance_models()\n")
-```
-
 ## Model 1. Full Logistic and Linear Models
 
-As shown below, the most significant predictors for `TARGET_FLAG` (whether a crash occurred) include variables related to the driver's profile and history. The AIC for this logistic model is `r\ AIC(model1_logistic)`.
+As shown below, the most significant predictors for `target_flag` (whether a crash occurred) include variables related to the driver's profile and history. The AIC for this logistic model is `r\ AIC(model1_logistic)`.
 
-Similarly, for `TARGET_AMT` (cost of crash), the full linear model identifies significant predictors. The R-squared for this model is `r\ summary(model1_linear)$r.squared`.
+Similarly, for `target_amt` (cost of crash), the full linear model identifies significant predictors. The R-squared for this model is `r\ summary(model1_linear)$r.squared`.
 
 ```{r}
 #| label: build-model1-insurance
-#| eval: false
 
-# Model 1: Full Logistic Model (TARGET_FLAG)
+# Model 1: Full Logistic Model (target_flag)
 # This model uses all available numeric predictors
 model1_logistic <- glm(
-    formula = TARGET_FLAG ~ .,
-    data = train_data |> select(-INDEX, -TARGET_AMT),
+    formula = target_flag ~ .,
+    data = insurance_train_split |> select(-target_amt),
     family = binomial
 )
 
 cat("\n=== Full Logistic Model Summary ===\n")
 summary(model1_logistic)
 
-# Model 1: Full Linear Model (TARGET_AMT)
+# Model 1: Full Linear Model (target_amt)
 # This model uses all available numeric predictors
 model1_linear <- lm(
-    formula = TARGET_AMT ~ .,
-    data = train_data |> select(-INDEX, -TARGET_FLAG)
+    formula = target_amt ~ .,
+    data = insurance_train_split |> select(-target_flag)
 )
 
 cat("\n=== Full Linear Model Summary ===\n")
@@ -647,16 +513,15 @@ The AIC for the reduced logistic model is `r\ AIC(model2_logistic)`, and the R-s
 
 ```{r}
 #| label: build-model2-insurance
-#| eval: false
 
 # Model 2: Reduced Logistic Model
 # Keep only important predictors based on correlation analysis
-reduced_vars <- c("KIDSDRIV", "AGE", "HOMEKIDS", "YOJ", "INCOME", "HOME_VAL",
-                  "TRAVTIME", "BLUEBOOK", "TIF", "OLDCLAIM", "CLM_FREQ", "MVR_PTS", "CAR_AGE")
+reduced_vars <- c("kidsdriv", "age", "homekids", "yoj", "income", "home_val",
+                  "travtime", "bluebook", "tif", "oldclaim", "clm_freq", "mvr_pts", "car_age")
 
 model2_logistic <- glm(
-    formula = as.formula(paste("TARGET_FLAG ~", paste(reduced_vars, collapse = "+"))),
-    data = train_data,
+    formula = as.formula(paste("target_flag ~", paste(reduced_vars, collapse = "+"))),
+    data = insurance_train_split,
     family = binomial
 )
 
@@ -665,8 +530,8 @@ summary(model2_logistic)
 
 # Model 2: Reduced Linear Model
 model2_linear <- lm(
-    formula = as.formula(paste("TARGET_AMT ~", paste(reduced_vars, collapse = "+"))),
-    data = train_data
+    formula = as.formula(paste("target_amt ~", paste(reduced_vars, collapse = "+"))),
+    data = insurance_train_split
 )
 
 cat("\n=== Reduced Linear Model Summary ===\n")
@@ -681,12 +546,11 @@ The AIC for the stepwise logistic model is `r\ AIC(model3_logistic)`, and the R-
 
 ```{r}
 #| label: build-model3-insurance
-#| eval: false
 
 # Model 3: Backward Stepwise Logistic Model
 full_logistic <- glm(
-    formula = TARGET_FLAG ~ .,
-    data = train_data |> select(-INDEX, -TARGET_AMT),
+    formula = target_flag ~ .,
+    data = insurance_train_split |> select(-target_amt),
     family = binomial
 )
 
@@ -697,8 +561,8 @@ summary(model3_logistic)
 
 # Model 3: Backward Stepwise Linear Model
 full_linear <- lm(
-    formula = TARGET_AMT ~ .,
-    data = train_data |> select(-INDEX, -TARGET_FLAG)
+    formula = target_amt ~ .,
+    data = insurance_train_split |> select(-target_flag)
 )
 
 model3_linear <- step(full_linear, direction = "backward", trace = 0)
@@ -717,7 +581,6 @@ We evaluate both logistic and linear regression models using standard metrics fr
 
 ```{r}
 #| label: model-evaluation-functions
-#| eval: false
 
 #' Evaluate Logistic Regression Models
 #' @param model A glm logistic model
@@ -725,7 +588,7 @@ We evaluate both logistic and linear regression models using standard metrics fr
 #' @param data Test dataframe
 #' @param target_col Name of target column
 #' @return Tibble with evaluation metrics
-evaluate_logistic_model <- function(model, model_name, data, target_col = "TARGET_FLAG") {
+evaluate_logistic_model <- function(model, model_name, data, target_col = "target_flag") {
     probs <- predict(model, newdata = data, type = "response")
     preds <- factor(ifelse(probs > 0.5, 1, 0), levels = c(0, 1))
     actuals <- factor(data[[target_col]], levels = c(0, 1))
@@ -755,7 +618,7 @@ evaluate_logistic_model <- function(model, model_name, data, target_col = "TARGE
 #' @param data Test dataframe
 #' @param target_col Name of target column
 #' @return Tibble with evaluation metrics
-evaluate_linear_model <- function(model, model_name, data, target_col = "TARGET_AMT") {
+evaluate_linear_model <- function(model, model_name, data, target_col = "target_amt") {
     preds <- predict(model, newdata = data)
     actuals <- data[[target_col]]
     
@@ -787,7 +650,7 @@ logistic_models <- list(
 )
 
 logistic_comparison <- imap_dfr(logistic_models, ~ {
-    evaluate_logistic_model(.x, .y, test_data)
+    evaluate_logistic_model(.x, .y, insurance_test_split)
 }) |> arrange(AIC)
 
 # Display logistic model comparison
@@ -807,7 +670,7 @@ linear_models <- list(
 )
 
 linear_comparison <- imap_dfr(linear_models, ~ {
-    evaluate_linear_model(.x, .y, test_data)
+    evaluate_linear_model(.x, .y, insurance_test_split)
 }) |> arrange(desc(R_Squared))
 
 # Display linear model comparison
@@ -827,7 +690,6 @@ For the linear regression models, we use R-squared to select the best model, wit
 
 ```{r}
 #| label: selected-model-summaries
-#| eval: false
 
 # Display summary of best logistic model
 cat("=== Best Logistic Model Summary ===\n")
@@ -837,13 +699,12 @@ summary(logistic_models[[best_logistic$Model]])
 cat("\n=== Best Linear Model Summary ===\n")
 summary(linear_models[[best_linear$Model]])
 ```
-```
 
 To make inferences from our top performing models, we can look at the significance of the predictors.
 
-For the logistic regression model (TARGET_FLAG), the model identifies key factors that significantly predict whether a person will be in a car crash. The most important predictors include variables related to driving history, vehicle characteristics, and demographic factors.
+For the logistic regression model (target_flag), the model identifies key factors that significantly predict whether a person will be in a car crash. The most important predictors include variables related to driving history, vehicle characteristics, and demographic factors.
 
-For the linear regression model (TARGET_AMT), significant predictors help explain the variation in the cost of claims when crashes occur.
+For the linear regression model (target_amt), significant predictors help explain the variation in the cost of claims when crashes occur.
 
 # Results
 
@@ -852,30 +713,29 @@ Generate predictions on the evaluation dataset using the selected models:
 ```{r}
 #| label: predictions-on-eval-set
 #| echo: true
-#| eval: false
 
 # Get the best model names
 best_logistic_name <- best_logistic$Model
 best_linear_name <- best_linear$Model
 
-# Generate predictions for TARGET_FLAG (probability of crash)
+# Generate predictions for target_flag (probability of crash)
 eval_probs <- predict(
     logistic_models[[best_logistic_name]], 
-    newdata = eval_data, 
+    newdata = insurance_eval_prepared, 
     type = "response"
 )
 
-# Generate predictions for TARGET_AMT (cost if crash)
+# Generate predictions for target_amt (cost if crash)
 eval_amounts <- predict(
     linear_models[[best_linear_name]], 
-    newdata = eval_data
+    newdata = insurance_eval_prepared
 )
 
 # Create results dataframe
-insurance_eval_results <- eval_data |>
+insurance_eval_results <- insurance_eval_prepared |>
     mutate(
-        PREDICTED_TARGET_FLAG = ifelse(eval_probs > 0.5, 1, 0),
-        PREDICTED_TARGET_AMT = ifelse(PREDICTED_TARGET_FLAG == 1, 
+        PREDICTED_target_flag = ifelse(eval_probs > 0.5, 1, 0),
+        PREDICTED_target_amt = ifelse(PREDICTED_target_flag == 1, 
                                        round(eval_amounts, 2), 
                                        0)
     )
@@ -886,15 +746,15 @@ write_csv(insurance_eval_results, "insurance_evaluation_predictions.csv")
 # Display sample predictions
 cat("Sample predictions for evaluation data:\n")
 insurance_eval_results |>
-    select(INDEX, PREDICTED_TARGET_FLAG, PREDICTED_TARGET_AMT) |>
+    select(PREDICTED_target_flag, PREDICTED_target_amt) |>
     head(10) |>
     knitr::kable(caption = "Sample Insurance Predictions")
 ```
 
 We generate predictions for both outcomes:
 
-1. **TARGET_FLAG**: Whether the person will be in a car crash (binary: 0 or 1)
-2. **TARGET_AMT**: The cost if a crash occurs (continuous dollar amount)
+1. **target_flag**: Whether the person will be in a car crash (binary: 0 or 1)
+2. **target_amt**: The cost if a crash occurs (continuous dollar amount)
 
 The predictions are written to `insurance_evaluation_predictions.csv` for submission.
 
