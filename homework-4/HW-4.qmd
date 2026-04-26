@@ -370,7 +370,7 @@ The results above indicate that the assumption of linearity is satisfied for all
 ```{r}
 #| label: assumption-binary-outcome
 #| echo: true
-#| eval: false
+#| eval: true
 
 
 # Confirming that the target is binary
@@ -393,7 +393,7 @@ Each record in the dataset represents a distinct neighborhood, and there is no r
 #| label: assumption-multicollinearity
 #| echo: true
 #| warning: false
-#| eval: false
+#| eval: true
 
 library(car)
 
@@ -422,7 +422,7 @@ The VIF values is calculated for all predictors to check for multicollinearity. 
 #| label: assumption-linearity-log-odds
 #| echo: true
 #| warning: false
-#| eval: false
+#| eval: true
 
 # Box-Tidwell test: add interaction of each continuous predictor with its log
 # to test whether the log-odds relationship is linear

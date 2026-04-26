@@ -170,11 +170,11 @@ Finally, the cleaned training and evaluation datasets were stored as `wine_train
 ```{r}
 #| label: data-preparation
 #| echo: true
-#| eval: false
+#| eval: true
 
-# Remove INDEX variable
-wine_train_prep <- wine_train |> select(-index)
-wine_eval_prep  <- wine_eval  |> select(-index)
+# Remove INDEX variable (if present)
+wine_train_prep <- wine_train |> clean_names() |> select(-any_of("index"))
+wine_eval_prep  <- wine_eval  |> clean_names() |> select(-any_of("index"))
 
 # Identify numeric predictors
 numeric_vars <- wine_train_prep |>
@@ -280,7 +280,7 @@ First, we will split our dataset into a training and testing set. We will use th
 
 ```{r}
 #| label: split-data
-#| eval: false
+#| eval: true
 
 set.seed(19940211)
 train_indices <- sample(nrow(crime_clean), size = 0.8 * nrow(crime_clean))
@@ -295,7 +295,7 @@ crime_test_split <- crime_clean[-train_indices, ]
 ```{r}
 #| label: assumption-binary-outcome
 #| echo: true
-#| eval: false
+#| eval: true
 
 
 # Confirming that the target is binary
@@ -318,7 +318,7 @@ Each record in the dataset represents a distinct neighborhood, and there is no r
 #| label: assumption-multicollinearity
 #| echo: true
 #| warning: false
-#| eval: false
+#| eval: true
 
 library(car)
 
@@ -347,7 +347,7 @@ The VIF values is calculated for all predictors to check for multicollinearity. 
 #| label: assumption-linearity-log-odds
 #| echo: true
 #| warning: false
-#| eval: false
+#| eval: true
 
 # Box-Tidwell test: add interaction of each continuous predictor with its log
 # to test whether the log-odds relationship is linear
@@ -397,7 +397,7 @@ As shown below, the most significant predictors were `nox` and `rad` ($P<0.001$)
 
 ```{r}
 #| label: build-model1
-#| eval: false
+#| eval: true
 
 model1 <- glm(
     formula = target ~ zn + indus + chas + nox + rm + age + dis + rad + tax +
@@ -419,7 +419,7 @@ These changes resulted in a model with AIC `r\ AIC(model2)`.
 
 ```{r}
 #| label: build-model2
-#| eval: false
+#| eval: true
 
 model2 <- glm(
     formula = target ~ zn + indus + chas + nox + rad + ptratio + medv,
@@ -438,7 +438,7 @@ The best model had `nox`, `tax_rad_ratio`, `ptratio`, and `age` as the most sign
 
 ```{r}
 #| label: build-model3
-#| eval: false
+#| eval: true
 
 # Full model includes all variables
 model_full <- glm(
@@ -463,7 +463,7 @@ Of these three models, model 3 has the lowest AIC. In the next section, we will 
 #| label: model-comparison-table
 #| echo: true
 #| results: asis
-#| eval: false
+#| eval: true
 
 # Creating a custom helper function to extract all the required metrics
 # explicitly evaluating on the provided training dataset.
@@ -530,7 +530,7 @@ Given that our target variable was fairly balanced (49% of all observations had 
 ```{r}
 #| label: stepwise-model-summary
 #| echo: true
-#| eval: false
+#| eval: true
 # Display the summary of the selected Stepwise model to interpret coefficients and significance
 summary(best_model_obj)
 ```
@@ -542,7 +542,7 @@ To make inferences from our top performing model, we can look at the significanc
 ```{r}
 #| label: predictions-on-eval-set
 #| echo: true
-#| eval: false
+#| eval: true
 # Generate predictions on the evaluation dataset using the selected model
 eval_predictions <- predict(best_model_obj, newdata = crime_eval_clean, type = "response")
 
