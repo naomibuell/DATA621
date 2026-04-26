@@ -131,7 +131,7 @@ insurance_eval_dummies <- insurance_eval |>
 
 ```
 
-In previewing summary statistics for all variables, some of the minimum values appear to be in error. For example, `car_age` has a negative value, and there are a high number of 0 values in `car_age`, `home_val`, which may be data entry errors--we will replace them missing values.
+In previewing summary statistics for all variables, some of the minimum values appear to be in error. For example, `car_age` has a negative value, and there are a high number of 0 values in `car_age`, `home_val`, which may be data entry errors--we will treat them as missing and replace them with imputed values.
 
 ```{r}
 #| label: preview-summ-stats
@@ -166,7 +166,7 @@ tbl_summ_stats <- insurance_train_dummies |>
 tbl_summ_stats
 ```
 
-@tbl-summary-statistics presents descriptive characteristics of the training data. The target variables are `target_flag`, which represents whether the person was in a car crash (1) or not (0), and `target_amt`, which represents the cost of the crash if it occurs. The other variables represent various information on auto insurance for different individuals. 
+@tbl-summary-statistics presents descriptive characteristics of the training data. The target variables are `target_flag`, which represents whether the person was in a car crash (1) or not (0), and `target_amt`, which represents the cost of the crash if it occurs. The other variables represent various information on auto insurance for different individuals.
 
 ```{r}
 #| label: fig-correlation-matrix
@@ -212,9 +212,9 @@ most_corr_w_target_amt <- insurance_train_cor |>
     pull(Variable)
 ```
 
-The correlation between all variables are shown @fig-correlation-matrix. The variables most correlated with `target_flag`, whether there was a car crash, (besides the amount the crash costed) are `r paste(most_corr_w_target_flag, collapse = ", ")`. This means that people who work or live in a more rural area are less likely to be in a crash, and people who  have more motor vehicle record points or have more claims in the past 5 years are more likely to be in a crash. There were no predictor variables strongly correlated with `target_amt`, the cost if the crash occurs. 
+The correlation between all variables are shown @fig-correlation-matrix. The variables most correlated with `target_flag`, whether there was a car crash, (besides the amount the crash costed) are `r paste(most_corr_w_target_flag, collapse = ", ")`. This means that people who work or live in a more rural area are less likely to be in a crash, and people who have more motor vehicle record points or have more claims in the past 5 years are more likely to be in a crash. There were no predictor variables strongly correlated with `target_amt`, the cost if the crash occurs.
 
-Lastly, for continuous variables, we also looked at the distribution of each variable to check for skewness and outliers. 
+Lastly, for continuous variables, we also looked at the distribution of each variable to check for skewness and outliers.
 
 ```{r}
 #| label: fig-distributions
@@ -348,7 +348,7 @@ sum(is.na(insurance_eval_prepared))
 
 ## Data Splits
 
-First, we will split our dataset into a training and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
+First, we will split our dataset into a training and testing set (80:20 ratio). We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
 
 ```{r}
 #| label: split-data
@@ -466,13 +466,10 @@ The Box-Tidwell test was used to assess whether each continuous predictor has a 
 
 We will build models for two separate outcomes:
 
-1. **target_flag** (binary): Whether the person was in a car crash (1) or not (0)
-2. **target_amt** (continuous): The amount of money the crash cost if it occurs
+1.  **target_flag** (binary): Whether the person was in a car crash (1) or not (0)
+2.  **target_amt** (continuous): The amount of money the crash cost if it occurs
 
-For each outcome, we compare three models as per the textbook methods:
-- Model 1: Full model with all predictors
-- Model 2: Reduced model (removing highly correlated or insignificant variables)
-- Model 3: Backward stepwise selection model
+For each outcome, we compare three models as per the textbook methods: - Model 1: Full model with all predictors - Model 2: Reduced model (removing highly correlated or insignificant variables) - Model 3: Backward stepwise selection model
 
 ## Model 1. Full Logistic and Linear Models
 
@@ -671,7 +668,7 @@ linear_models <- list(
 
 linear_comparison <- imap_dfr(linear_models, ~ {
     evaluate_linear_model(.x, .y, insurance_test_split)
-}) |> arrange(desc(R_Squared))
+}) |> arrange(desc(Adj_R_Squared))
 
 # Display linear model comparison
 linear_comparison |> 
@@ -684,7 +681,7 @@ cat("\nBest Linear Model:", best_linear$Model, "\n")
 
 For the logistic models, we use AIC as our primary criterion for model selection, with lower AIC indicating better model fit. The `r best_logistic$Model` achieved the lowest AIC of `r best_logistic$AIC`, with an accuracy of `r round(best_logistic$Accuracy, 3)` and AUC of `r round(best_logistic$AUC, 3)`.
 
-For the linear regression models, we use R-squared to select the best model, with higher R-squared indicating better model fit. The `r best_linear$Model` achieved the highest R-squared of `r round(best_linear$R_Squared, 3)` with RMSE of `r round(best_linear$RMSE, 2)`.
+For the linear regression models, we use adjusted R-squared to select the best model, with higher values indicating better model fit. The `r best_linear$Model` achieved the highest adjusted R-squared of `r round(best_linear$Adj_R_Squared, 3)` with RMSE of `r round(best_linear$RMSE, 2)`.
 
 ## Selected Model Summaries
 
@@ -704,7 +701,7 @@ To make inferences from our top performing models, we can look at the significan
 
 For the logistic regression model (target_flag), the model identifies key factors that significantly predict whether a person will be in a car crash. The most important predictors include variables related to driving history, vehicle characteristics, and demographic factors.
 
-For the linear regression model (target_amt), significant predictors help explain the variation in the cost of claims when crashes occur.
+For the linear regression model (target_amt), significant predictors help explain the variation in the cost of claims when crashes occur. The most important predictors include variables related to driving history and vehicle characteristics.
 
 # Results
 
@@ -753,11 +750,13 @@ insurance_eval_results |>
 
 We generate predictions for both outcomes:
 
-1. **target_flag**: Whether the person will be in a car crash (binary: 0 or 1)
-2. **target_amt**: The cost if a crash occurs (continuous dollar amount)
+1.  **target_flag**: Whether the person will be in a car crash (binary: 0 or 1)
+2.  **target_amt**: The cost if a crash occurs (continuous dollar amount)
 
 The predictions are written to `insurance_evaluation_predictions.csv` for submission.
 
 # Conclusion
 
-In conclusion, our `best_model_info$Model` model, which was selected based on deviance and other performance metrics, demonstrates strong predictive capabilities for classifying neighborhoods as high-crime or low-crime based on a variety of environmental and structural factors. The significant predictors identified in the model provide valuable insights into the underlying drivers of crime in urban areas, highlighting the importance of air pollution, school crowding, aging infrastructure, and proximity to employment centers. These findings can inform policymakers and community leaders in their efforts to target interventions and allocate resources effectively to reduce crime rates. Future work could explore additional modeling techniques, such as regularization or ensemble methods, to further enhance predictive performance and interpretability.
+In conclusion, our best models for predicting the probability that a person will crash their car and the cost if a crash occurs were the `best_logistic_name` and `best_linear_name`, respectively. The best logistic regression model had respectable performance with accuracy of `r round(best_logistic$Accuracy, 3)` and AUC of `r round(best_logistic$AUC, 3)`. However, the adjusted R-squared of the best linear regression model was only `r round(best_linear$Adj_R_Squared, 3)`, meaning that it does not explain the variation in the target variable.
+
+The significant predictors in the logistic regression model suggested that driving history and vehicle characteristics are important determinants of the probability of a crash, which is consistent with our expectations (i.e., if you have a history of reckless driving, you're more likely to crash again). These findings can help insurance companies predict drivers' accident risk, which informs the cost of insurance premiums. Other modeling approaches, such as machine learning, may be needed to develop a better predictive model of the cost of a crash.
