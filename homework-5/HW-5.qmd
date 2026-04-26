@@ -153,81 +153,122 @@ wine_train |>
 
 # Data Preparation
 
-For the crime data used in Homework 3, the first step in data preparation was to check whether any variables contained missing values. This crime data set does not contain missing values in either the training or evaluation files. Therefore, no imputation or missingness flag variables were needed.
+For the wine data used in this assignment, the first step in data preparation was to examine whether any variables contained missing values. Unlike the crime dataset from Homework 3, the wine dataset contains missing values across several predictor variables in both the training and evaluation datasets. Because of this, appropriate missing-value treatment was required before proceeding to modeling.
 
-Even though missing-value treatment was unnecessary, we still prepared the data for binary logistic regression by creating transformed and derived predictors. Several predictors are right-skewed, especially `zn`, `dis`, `rad`, `tax`, and `lstat`. For these variables, log transformations were created using `log1p()`, which reduces skewness while safely handling zero values. These transformed variables may improve model fit by making relationships with the log-odds of the response more stable.
+To address missing data, median imputation was applied to all numeric predictor variables. Median imputation was selected because many of the chemical variables (such as sulfur dioxide levels, residual sugar, and alcohol content) are skewed and may contain outliers. Using the median provides a robust estimate that is less sensitive to extreme values than the mean.
 
-We also created a small set of engineered variables that may be useful in later models. First, `nox_indus` captures the combined effect of air pollution concentration and industrial land use. Second, `rm_lstat_ratio` measures the balance between average rooms per dwelling and lower-status population, combining a housing-quality measure with a socioeconomic measure. Third, `tax_rad_ratio` captures the relationship between tax burden and highway accessibility. These new variables were created because logistic regression can benefit from transformed and combined predictors when the original variables may not fully capture the structure related to high-crime neighborhoods.
+In addition to imputation, missingness indicator variables were created for each predictor. This was done because the assignment specifically notes that missing values themselves may be predictive of the response variable. By creating binary flags indicating whether a value was originally missing, we preserve this potential signal for use in the modeling stage.
 
-Finally, the cleaned training and evaluation data sets were stored as `crime_clean` and `crime_eval_clean` so the later modeling section can use them directly.
+Next, several transformations were applied to improve the distribution of the predictors. Variables such as `alcohol`, `residualsugar`, `freesulfurdioxide`, and `totalsulfurdioxide` exhibited right-skewed distributions, so log transformations were created using `log1p()`. These transformations reduce skewness and help stabilize relationships between predictors and the count response variable.
+
+We also created a set of engineered variables to capture relationships between predictors that may not be fully represented by the original variables. The variable `sulfur_ratio` measures the relationship between total and free sulfur dioxide, while `acidity_ratio` compares volatile acidity to fixed acidity. The variable `density_alcohol_ratio` captures the interaction between density and alcohol content. Finally, `quality_score` combines expert rating (`stars`) and marketing appeal (`labelappeal`) to reflect an overall perceived quality of the wine.
+
+In addition, the `stars` variable was transformed into categorical buckets (low, medium, high) to capture potential non-linear effects. These buckets were then converted into dummy variables for use in regression models.
+
+Finally, the cleaned training and evaluation datasets were stored as `wine_train_prep` and `wine_eval_prep` so they can be used directly in the modeling section.
 
 ```{r}
-#| label: data-preparation-check-missing
+#| label: data-preparation
 #| echo: true
 #| eval: false
 
-# Check missing values in training and evaluation data
-missing_train <- crime_train |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+# Remove INDEX variable
+wine_train_prep <- wine_train |> select(-index)
+wine_eval_prep  <- wine_eval  |> select(-index)
 
-missing_eval <- crime_eval |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+# Identify numeric predictors
+numeric_vars <- wine_train_prep |>
+    select(where(is.numeric)) |>
+    select(-target) |>
+    names()
 
-missing_train
-missing_eval
+# Create missingness flags
+wine_train_prep <- wine_train_prep |>
+    mutate(across(all_of(numeric_vars),
+                  ~ ifelse(is.na(.), 1, 0),
+                  .names = "{.col}_missing"))
 
-# Start with copies of the original datasets
-crime_clean <- crime_train
-crime_eval_clean <- crime_eval
+wine_eval_prep <- wine_eval_prep |>
+    mutate(across(all_of(numeric_vars),
+                  ~ ifelse(is.na(.), 1, 0),
+                  .names = "{.col}_missing"))
 
-# Create transformed and engineered predictors
-crime_clean <- crime_clean |>
+# Median imputation
+for (v in numeric_vars) {
+    med_val <- median(wine_train_prep[[v]], na.rm = TRUE)
+
+    wine_train_prep[[v]][is.na(wine_train_prep[[v]])] <- med_val
+    wine_eval_prep[[v]][is.na(wine_eval_prep[[v]])] <- med_val
+}
+
+# Transformations and feature engineering
+wine_train_prep <- wine_train_prep |>
     mutate(
-        # Log transforms for right-skewed predictors
-        log_zn = log1p(zn),
-        log_dis = log1p(dis),
-        log_rad = log1p(rad),
-        log_tax = log1p(tax),
-        log_lstat = log1p(lstat),
+        log_alcohol = log1p(alcohol),
+        log_residualsugar = log1p(residualsugar),
+        log_freesulfurdioxide = log1p(freesulfurdioxide),
+        log_totalsulfurdioxide = log1p(totalsulfurdioxide),
 
-        # Engineered variables
-        nox_indus = nox * indus,
-        rm_lstat_ratio = rm / lstat,
-        tax_rad_ratio = tax / rad
+        sulfur_ratio = totalsulfurdioxide / (freesulfurdioxide + 1),
+        acidity_ratio = volatileacidity / (fixedacidity + 1),
+        density_alcohol_ratio = density / (alcohol + 1),
+        quality_score = stars * labelappeal,
+
+        stars_bucket = case_when(
+            stars <= 2 ~ "low",
+            stars == 3 ~ "medium",
+            stars >= 4 ~ "high",
+            TRUE ~ "unknown"
+        )
     )
 
-crime_eval_clean <- crime_eval_clean |>
+wine_eval_prep <- wine_eval_prep |>
     mutate(
-        # Log transforms for right-skewed predictors
-        log_zn = log1p(zn),
-        log_dis = log1p(dis),
-        log_rad = log1p(rad),
-        log_tax = log1p(tax),
-        log_lstat = log1p(lstat),
+        log_alcohol = log1p(alcohol),
+        log_residualsugar = log1p(residualsugar),
+        log_freesulfurdioxide = log1p(freesulfurdioxide),
+        log_totalsulfurdioxide = log1p(totalsulfurdioxide),
 
-        # Engineered variables
-        nox_indus = nox * indus,
-        rm_lstat_ratio = rm / lstat,
-        tax_rad_ratio = tax / rad
+        sulfur_ratio = totalsulfurdioxide / (freesulfurdioxide + 1),
+        acidity_ratio = volatileacidity / (fixedacidity + 1),
+        density_alcohol_ratio = density / (alcohol + 1),
+        quality_score = stars * labelappeal,
+
+        stars_bucket = case_when(
+            stars <= 2 ~ "low",
+            stars == 3 ~ "medium",
+            stars >= 4 ~ "high",
+            TRUE ~ "unknown"
+        )
     )
 
-# Verify dimensions after preparation
-dim(crime_clean)
-dim(crime_eval_clean)
+# Convert categorical bucket to dummy variables
+wine_train_prep <- fastDummies::dummy_cols(
+    wine_train_prep,
+    select_columns = "stars_bucket",
+    remove_selected_columns = TRUE,
+    remove_first_dummy = TRUE
+)
 
-# Verify that no missing values remain after transformations
-crime_clean |>
+wine_eval_prep <- fastDummies::dummy_cols(
+    wine_eval_prep,
+    select_columns = "stars_bucket",
+    remove_selected_columns = TRUE,
+    remove_first_dummy = TRUE
+)
+
+# Check for remaining missing values
+wine_train_prep |>
     summarise(across(everything(), ~ sum(is.na(.)))) |>
     pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
     filter(Missing > 0)
 
-crime_eval_clean |>
+wine_eval_prep |>
     summarise(across(everything(), ~ sum(is.na(.)))) |>
     pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
     filter(Missing > 0)
 ```
+
 
 ### Linearity Assumption Summary
 

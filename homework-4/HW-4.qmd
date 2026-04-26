@@ -246,81 +246,106 @@ There are many 1-year old cars in the dataset, showing a high spike at 1 in the 
 
 # Data Preparation
 
-For the crime data used in Homework 3, the first step in data preparation was to check whether any variables contained missing values. This crime data set does not contain missing values in either the training or evaluation files. Therefore, no imputation or missingness flag variables were needed.
-
-Even though missing-value treatment was unnecessary, we still prepared the data for binary logistic regression by creating transformed and derived predictors. Several predictors are right-skewed, especially `zn`, `dis`, `rad`, `tax`, and `lstat`. For these variables, log transformations were created using `log1p()`, which reduces skewness while safely handling zero values. These transformed variables may improve model fit by making relationships with the log-odds of the response more stable.
-
-We also created a small set of engineered variables that may be useful in later models. First, `nox_indus` captures the combined effect of air pollution concentration and industrial land use. Second, `rm_lstat_ratio` measures the balance between average rooms per dwelling and lower-status population, combining a housing-quality measure with a socioeconomic measure. Third, `tax_rad_ratio` captures the relationship between tax burden and highway accessibility. These new variables were created because logistic regression can benefit from transformed and combined predictors when the original variables may not fully capture the structure related to high-crime neighborhoods.
-
-Finally, the cleaned training and evaluation data sets were stored as `crime_clean` and `crime_eval_clean` so the later modeling section can use them directly.
+The goal of this section is to prepare the insurance training and evaluation data for modeling. The assignment requires transformations of the original variables or the creation of new variables when useful. In this dataset, preparation included missing value treatment, missingness flags, mathematical transformations, and derived variables.
 
 ```{r}
-#| label: data-preparation-check-missing
-#| echo: true
-#| eval: false
+#| label: data-preparation
+#| warning: false
 
-# Check missing values in training and evaluation data
-missing_train <- crime_train |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+# Identify numeric predictor variables
+numeric_vars <- insurance_train_dummies |>
+  select(where(is.numeric)) |>
+  select(-target_flag, -target_amt) |>
+  names()
 
-missing_eval <- crime_eval |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+# Create missingness flags before imputation
+insurance_train_prepared <- insurance_train_dummies |>
+  mutate(
+    age_missing = ifelse(is.na(age), 1, 0),
+    car_age_missing = ifelse(is.na(car_age), 1, 0),
+    home_val_missing = ifelse(is.na(home_val), 1, 0),
+    income_missing = ifelse(is.na(income), 1, 0),
+    yoj_missing = ifelse(is.na(yoj), 1, 0)
+  )
 
-missing_train
-missing_eval
+insurance_eval_prepared <- insurance_eval_dummies |>
+  mutate(
+    age_missing = ifelse(is.na(age), 1, 0),
+    car_age_missing = ifelse(is.na(car_age), 1, 0),
+    home_val_missing = ifelse(is.na(home_val), 1, 0),
+    income_missing = ifelse(is.na(income), 1, 0),
+    yoj_missing = ifelse(is.na(yoj), 1, 0)
+  )
 
-# Start with copies of the original datasets
-crime_clean <- crime_train
-crime_eval_clean <- crime_eval
+# Median imputation using training medians
+for (v in numeric_vars) {
+  med_val <- median(insurance_train_prepared[[v]], na.rm = TRUE)
 
-# Create transformed and engineered predictors
-crime_clean <- crime_clean |>
-    mutate(
-        # Log transforms for right-skewed predictors
-        log_zn = log1p(zn),
-        log_dis = log1p(dis),
-        log_rad = log1p(rad),
-        log_tax = log1p(tax),
-        log_lstat = log1p(lstat),
+  insurance_train_prepared[[v]][is.na(insurance_train_prepared[[v]])] <- med_val
+  insurance_eval_prepared[[v]][is.na(insurance_eval_prepared[[v]])] <- med_val
+}
 
-        # Engineered variables
-        nox_indus = nox * indus,
-        rm_lstat_ratio = rm / lstat,
-        tax_rad_ratio = tax / rad
+# Create transformed and engineered variables
+insurance_train_prepared <- insurance_train_prepared |>
+  mutate(
+    log_income = log1p(income),
+    log_home_val = log1p(home_val),
+    log_bluebook = log1p(bluebook),
+    log_oldclaim = log1p(oldclaim),
+    log_travtime = log1p(travtime),
+
+    claim_rate = oldclaim / (clm_freq + 1),
+    car_value_age_ratio = bluebook / (car_age + 1),
+    risk_points_claims = mvr_pts + clm_freq,
+
+    age_bucket = case_when(
+      age < 25 ~ "young_driver",
+      age >= 25 & age < 60 ~ "adult_driver",
+      age >= 60 ~ "older_driver",
+      TRUE ~ "unknown"
     )
+  )
 
-crime_eval_clean <- crime_eval_clean |>
-    mutate(
-        # Log transforms for right-skewed predictors
-        log_zn = log1p(zn),
-        log_dis = log1p(dis),
-        log_rad = log1p(rad),
-        log_tax = log1p(tax),
-        log_lstat = log1p(lstat),
+insurance_eval_prepared <- insurance_eval_prepared |>
+  mutate(
+    log_income = log1p(income),
+    log_home_val = log1p(home_val),
+    log_bluebook = log1p(bluebook),
+    log_oldclaim = log1p(oldclaim),
+    log_travtime = log1p(travtime),
 
-        # Engineered variables
-        nox_indus = nox * indus,
-        rm_lstat_ratio = rm / lstat,
-        tax_rad_ratio = tax / rad
+    claim_rate = oldclaim / (clm_freq + 1),
+    car_value_age_ratio = bluebook / (car_age + 1),
+    risk_points_claims = mvr_pts + clm_freq,
+
+    age_bucket = case_when(
+      age < 25 ~ "young_driver",
+      age >= 25 & age < 60 ~ "adult_driver",
+      age >= 60 ~ "older_driver",
+      TRUE ~ "unknown"
     )
+  )
 
-# Verify dimensions after preparation
-dim(crime_clean)
-dim(crime_eval_clean)
+# Convert age bucket into dummy variables
+insurance_train_prepared <- fastDummies::dummy_cols(
+  insurance_train_prepared,
+  select_columns = "age_bucket",
+  remove_selected_columns = TRUE,
+  remove_first_dummy = TRUE
+)
 
-# Verify that no missing values remain after transformations
-crime_clean |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
-    filter(Missing > 0)
+insurance_eval_prepared <- fastDummies::dummy_cols(
+  insurance_eval_prepared,
+  select_columns = "age_bucket",
+  remove_selected_columns = TRUE,
+  remove_first_dummy = TRUE
+)
 
-crime_eval_clean |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
-    filter(Missing > 0)
+# Confirm no missing values remain
+sum(is.na(insurance_train_prepared))
+sum(is.na(insurance_eval_prepared))
 ```
+
 
 ### Linearity Assumption Summary
 
@@ -875,10 +900,4 @@ The predictions are written to `insurance_evaluation_predictions.csv` for submis
 
 # Conclusion
 
-In conclusion, our selected models demonstrate strong predictive capabilities for insurance outcomes:
-
-- **Logistic Model** (`r best_logistic_name`): Achieved an accuracy of `r round(best_logistic$Accuracy, 3)` and AUC of `r round(best_logistic$AUC, 3)` for predicting crash probability.
-
-- **Linear Model** (`r best_linear_name`): Achieved an R-squared of `r round(best_linear$R_Squared, 3)` for predicting claim costs.
-
-The significant predictors identified in both models provide valuable insights into the key factors driving insurance claims. These findings can inform risk assessment and pricing strategies for the insurance company.
+In conclusion, our `best_model_info$Model` model, which was selected based on deviance and other performance metrics, demonstrates strong predictive capabilities for classifying neighborhoods as high-crime or low-crime based on a variety of environmental and structural factors. The significant predictors identified in the model provide valuable insights into the underlying drivers of crime in urban areas, highlighting the importance of air pollution, school crowding, aging infrastructure, and proximity to employment centers. These findings can inform policymakers and community leaders in their efforts to target interventions and allocate resources effectively to reduce crime rates. Future work could explore additional modeling techniques, such as regularization or ensemble methods, to further enhance predictive performance and interpretability.
