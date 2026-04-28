@@ -1,9 +1,9 @@
 ---
-title: "Medicaid Expansion and Opioid Misuse Disorder in the US"
+title: "Predictors of Opioid Misuse Disorder in the US"
 subtitle: "Final Project"
 format: pdf
 bibliography: references.bib
-csl: chicago-author-date.csl
+csl: apa.csl
 author:
   - name: Naomi Buell
   - name: Richie Rivera
@@ -42,11 +42,25 @@ library(tidytable)
 # Abstract (Naomi)
 *Use 250 words or less to summarize your problem, methodology, and major outcomes.*
 
+Background: Opioid addiction is a public health crisis that has affected countless lives. 
+ 
+Research Question: What factors are important for predicting prevalence rate of opioid use disorder (OUD)? 
+ 
+Methods: We downloaded data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2016–2019 and 2022)...[TBD]
+ 
+Results: [TBD]
+ 
+Conclusion: [TBD]
+
 # Key words (Naomi)
 *Select a few key words (up to five) related to your work.*
+Opioid Use Disorder, Regression Analysis, Public Health, Substance Abuse
 
 # Introduction (Naomi)
 *Describe the background and motivation of your problem.*
+
+Opioid addiction is a public health crisis that has affected countless lives. The United States is experiencing a public health crisis of almost unprecedented scale:
+an epidemic of opioid use disorder (OUD) and related overdose deaths, the magnitude of which has increased exponentially in the past decades [@Mancher2019]. In just one year, the age-adjusted rate of drug overdose deaths increased 31% (from 21.6 in 2019 per 100k population to 28.3 in 2020) [@Hedegaard2021]. In this project, we investigate the factors that are important for predicting the prevalence rate of OUD across US states. We use data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2016–2019 and 2022). We also use data on state-level demographic characteristics. We apply regression analysis to identify the key predictors of OUD prevalence and discuss the implications of our findings for public health interventions and policy decisions.
 
 # Literature review (Alex)
 *Discuss how other researchers have addressed similar problems, what their achievements are, and what the advantage and drawbacks of each reviewed approach are. Explain how your investigation is similar or different to the state-of-the- art. Please cite the relevant papers where appropriate.*
@@ -58,22 +72,49 @@ Example citation [@Volkow2019].
 
 ## Exploratory Data Analysis (Naomi)
 
-## Data Preparation methods (Nana)
+```{r}
+#| label: load-data
 
-## Build models methods ()
+# Read in all CSVs from the data directory and store them in a list
+filepaths <- list.files(path = "final-project/data", pattern = "*.csv", full.names = TRUE)
+data_list <- lapply(filepaths, read_csv)
+names(data_list) <- filepaths |>
+  basename() |>
+  gsub("\\.csv$", "", x = _) |>
+  make_clean_names()
 
-## Select models methods ()
+# Save the data frames in the global environment with names based on the file names
+list2env(data_list, .GlobalEnv)
+
+```
+
+```{r}
+#| label: merge-data
+
+```
+
+## Data Preparation methods (Alex)
+
+## Assumptions (Nana)
+
+## Build models methods (Richie)
+
+## Select models methods (Said)
 
 # Experimentation and Results
 *Describe the specifics of what you did (data exploration, data preparation, model building, model selection, model evaluation, etc.), and what you found out (statistical analyses, interpretation and discussion of the results, etc.).*
 
 ## Exploratory Data Analysis (Naomi)
 
-## Results of Data Preparation (Nana)
+## Results of Data Preparation (Alex)
 
-## Results of Building models ()
+## Results of Assumption checks (Nana)
 
-## Results of model selection ()
+## Results of Building models (Richie)
 
-# Discussion and Conclusions ()
+## Results of model selection (Said)
+
+# Discussion and Conclusions (Naomi)
 *Conclude your findings, limitations, and suggest areas for future work.*
+
+# References
