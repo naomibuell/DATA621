@@ -37,6 +37,10 @@ library(caret)
 library(pROC)
 library(fastDummies)
 library(tidytable)
+library(readr)
+library(dplyr)
+library(MASS)  # For glm.nb (Negative Binomial)
+
 ```
 
 # Introduction
@@ -270,23 +274,9 @@ wine_eval_prep |>
 ```
 
 
-### Linearity Assumption Summary
 
-The results above indicate that the assumption of linearity is satisfied for all independent variables. However, several were flagged as being unlikely to have predictive value in a multivariate linear model.
 
-## Data Splits
 
-First, we will split our dataset into a training and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
-
-```{r}
-#| label: split-data
-#| eval: true
-
-set.seed(19940211)
-train_indices <- sample(nrow(crime_clean), size = 0.8 * nrow(crime_clean))
-crime_train_split <- crime_clean[train_indices, ]
-crime_test_split <- crime_clean[-train_indices, ]
-```
 
 # Check assumptions for binary logistic regression
 
@@ -389,73 +379,87 @@ The Box-Tidwell test was used to assess whether each continuous predictor has a 
 
 # Build models
 
-We compared three models. Our first model included all the variables in the cleaned training dataset. The second model aimed to reduce multicollinearity by omitting variables that had correlation coefficients $|r|>0.7$ (see Data Exploration section). Finally, we generated the third model using backward stepwise selection from a full model that included transformed variables and newly created variables (see Data Preparation section).
+## Modeling Plan
 
-## Model 1. All untransformed variables
+We follow a workflow centered on building valid models and assessing predictive performance, as emphasized in our primary texts:
 
-As shown below, the most significant predictors were `nox` and `rad` ($P<0.001$). In addition, `age` and `ptratio` were significant at the $P<0.01$ level, and `dis` and `tax` were significant at the $P<0.05$ level. The AIC for this model is `r\ AIC(model1)`.
+Partitioning: Following AMAR Section 7.3, we split data into a training set for model development and a test set for assessing predictive ability. LMR Section 9.1 also notes the use of a validation sample to avoid over-estimation of model quality.
 
-```{r}
-#| label: build-model1
-#| eval: true
+Poisson GLM: While LMR Section 1.3 identifies Poisson regression as a key extension for count responses, it primarily focuses on Gaussian linear models. We use the Pearson dispersion check to verify the model's validity.
 
-model1 <- glm(
-    formula = target ~ zn + indus + chas + nox + rm + age + dis + rad + tax +
-        ptratio + lstat + medv,
-    family = "binomial",
-    data = crime_train_split
-)
-
-summary(model1)
-```
-
-## Model 2. Reduce multicollinearity
-
-In the Data Exploration section, we showed that `rad` and `tax` were strongly correlated (r=0.91), which suggests that only one of these variables is needed in Model 1 (we chose to retain `rad` as it was more highly significant). Similarly, `medv` was shown to be potentially multicollinear with `lstat` (r=0.74) and `rm` (r=0.71), so we removed the latter variables.
-
-In addition, the correlation between `nox` (predictor) and `target` (response) suggests that `nox` is an important predictor, so we removed its potential collinear pairs `age` and `dis`. Although `nox` was moderately correlated with `indus` (r=0.76), we retained `indus` because removal of both `indus` and `tax` (highly correlated with `rad`) would eliminate a potentially informative predictor.
-
-These changes resulted in a model with AIC `r\ AIC(model2)`.
+Lasso Penalization: We implement LASSO as a modern development for variable selection
 
 ```{r}
-#| label: build-model2
+#| label: split-wine-data
 #| eval: true
+# Prepare train/test splits (80/20) and detect the target column robustly
+set.seed(19940211)
 
-model2 <- glm(
-    formula = target ~ zn + indus + chas + nox + rad + ptratio + medv,
-    family = "binomial",
-    data = crime_train_split
-)
+# detect target column (case-insensitive 'target')
+target_var <- names(wine_train_prep)[tolower(names(wine_train_prep)) == "target"]
+if (length(target_var) == 0) stop("No 'target' column found in wine_train_prep")
+target_var <- target_var[1]
 
-summary(model2)
+train_idx <- createDataPartition(wine_train_prep[[target_var]], p = 0.8, list = FALSE)
+wine_train_split <- wine_train_prep[train_idx, ]
+wine_test_split  <- wine_train_prep[-train_idx, ]
+
+# Use numeric predictors by default (safe for GLMs)
+numeric_cols <- names(wine_train_split)[vapply(wine_train_split, is.numeric, logical(1))]
+predictors <- setdiff(numeric_cols, target_var)
+formula_all <- reformulate(predictors, response = target_var)
+cat("Using target:", target_var, "and", length(predictors), "numeric predictors.\n")
 ```
-
-## Model 3. Backward stepwise variable selection
-
-For this model, we performed backward stepwise selection from the set of variables including transformed and newly created variables.
-
-The best model had `nox`, `tax_rad_ratio`, `ptratio`, and `age` as the most significant predictors (P\<0.001). In addition, `log_dis` and `rm_lstat_ratio` were significant at the P\<0.05 level. The AIC of this model was `r\ AIC(model3)`, which was lower than that of Models 1 and 2.
 
 ```{r}
-#| label: build-model3
-#| eval: true
-
-# Full model includes all variables
-model_full <- glm(
-    formula = target ~ log_zn + indus + chas + nox + rm + age +
-        log_dis + log_rad + log_tax + ptratio + log_lstat + medv +
-        nox_indus + rm_lstat_ratio + tax_rad_ratio,
-    family = "binomial",
-    data = crime_train_split
-)
-
-# Select variables
-model3 <- step(model_full, direction = "backward")
-
-summary(model3)
+#| label: model-poisson
+cat("--- Poisson GLM (baseline) ---\n")
+poisson_mod <- glm(formula_all, data = wine_train_split, family = poisson(link = "log"))
+poisson_disp <- sum(residuals(poisson_mod, type = "pearson")^2) / df.residual(poisson_mod)
+cat("Poisson dispersion:", signif(poisson_disp, 4), "\n")
 ```
 
-Of these three models, model 3 has the lowest AIC. In the next section, we will evaluate the performance of these models to more determine which one is best for predicting the `target` variable.
+```{r}
+#| label: model-nb
+if (requireNamespace("MASS", quietly = TRUE)) {
+    cat("--- Negative Binomial (MASS::glm.nb) ---\n")
+    nb_mod <- tryCatch(MASS::glm.nb(formula_all, data = wine_train_split), error = function(e) { message("NB fit failed: ", e$message); NULL })
+} else cat("MASS not available; skipping Negative Binomial.\n")
+```
+
+```{r}
+#| label: model-zip
+if (requireNamespace("pscl", quietly = TRUE)) {
+    cat("--- Zero-inflated Poisson (pscl::zeroinfl) ---\n")
+    zip_mod <- tryCatch(
+        pscl::zeroinfl(as.formula(paste(target_var, "~", paste(predictors, collapse = "+"))), data = wine_train_split, dist = "poisson"),
+        error = function(e) { message("ZIP fit failed: ", e$message); NULL }
+    )
+} else cat("pscl not available; skipping ZIP/ZINB models.\n")
+```
+
+```{r}
+#| label: model-glmnet
+if (requireNamespace("glmnet", quietly = TRUE)) {
+    cat("--- Penalized Poisson (glmnet) ---\n")
+    x_train <- model.matrix(formula_all, wine_train_split)[, -1, drop = FALSE]
+    y_train <- wine_train_split[[target_var]]
+    cv_glmnet_lasso <- glmnet::cv.glmnet(x_train, y_train, family = "poisson", alpha = 1)
+    glmnet_mod <- cv_glmnet_lasso
+    cat("glmnet: lambda.min =", signif(glmnet_mod$lambda.min, 4), "\n")
+} else cat("glmnet not installed; skipping penalized models.\n")
+```
+
+```{r}
+#| label: model-xgboost
+if (requireNamespace("xgboost", quietly = TRUE)) {
+    cat("--- xgboost (count:poisson) ---\n")
+    x_train <- model.matrix(formula_all, wine_train_split)[, -1, drop = FALSE]
+    dtrain <- xgboost::xgb.DMatrix(data = x_train, label = wine_train_split[[target_var]])
+    params <- list(objective = "count:poisson", eval_metric = "rmse")
+    xgb_mod <- tryCatch(xgboost::xgb.train(params = params, data = dtrain, nrounds = 100, verbose = 0), error = function(e) { message("xgboost training failed: ", e$message); NULL })
+} else cat("xgboost not installed; skipping.\n")
+```
 
 # Select Models
 
