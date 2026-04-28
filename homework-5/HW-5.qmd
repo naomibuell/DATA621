@@ -172,101 +172,115 @@ Finally, the cleaned training and evaluation datasets were stored as `wine_train
 #| echo: true
 #| eval: true
 
-# Remove INDEX variable (if present)
-wine_train_prep <- wine_train |> clean_names() |> select(-any_of("index"))
-wine_eval_prep  <- wine_eval  |> clean_names() |> select(-any_of("index"))
+library(tidyverse)
+library(janitor)
+library(fastDummies)
+
+# Remove INDEX variable and clean column names
+wine_train_prep <- wine_train |> 
+  clean_names() |> 
+  select(-any_of("index"))
+
+wine_eval_prep <- wine_eval |> 
+  clean_names() |> 
+  select(-any_of("index"))
 
 # Identify numeric predictors
 numeric_vars <- wine_train_prep |>
-    select(where(is.numeric)) |>
-    select(-target) |>
-    names()
+  select(where(is.numeric)) |>
+  select(-target) |>
+  names()
 
 # Create missingness flags
 wine_train_prep <- wine_train_prep |>
-    mutate(across(all_of(numeric_vars),
-                  ~ ifelse(is.na(.), 1, 0),
-                  .names = "{.col}_missing"))
+  mutate(across(
+    all_of(numeric_vars),
+    ~ ifelse(is.na(.), 1, 0),
+    .names = "{.col}_missing"
+  ))
 
 wine_eval_prep <- wine_eval_prep |>
-    mutate(across(all_of(numeric_vars),
-                  ~ ifelse(is.na(.), 1, 0),
-                  .names = "{.col}_missing"))
+  mutate(across(
+    all_of(numeric_vars),
+    ~ ifelse(is.na(.), 1, 0),
+    .names = "{.col}_missing"
+  ))
 
 # Median imputation
 for (v in numeric_vars) {
-    med_val <- median(wine_train_prep[[v]], na.rm = TRUE)
-
-    wine_train_prep[[v]][is.na(wine_train_prep[[v]])] <- med_val
-    wine_eval_prep[[v]][is.na(wine_eval_prep[[v]])] <- med_val
+  med_val <- median(wine_train_prep[[v]], na.rm = TRUE)
+  
+  wine_train_prep[[v]][is.na(wine_train_prep[[v]])] <- med_val
+  wine_eval_prep[[v]][is.na(wine_eval_prep[[v]])] <- med_val
 }
 
 # Transformations and feature engineering
 wine_train_prep <- wine_train_prep |>
-    mutate(
-        log_alcohol = log1p(alcohol),
-        log_residualsugar = log1p(residualsugar),
-        log_freesulfurdioxide = log1p(freesulfurdioxide),
-        log_totalsulfurdioxide = log1p(totalsulfurdioxide),
-
-        sulfur_ratio = totalsulfurdioxide / (freesulfurdioxide + 1),
-        acidity_ratio = volatileacidity / (fixedacidity + 1),
-        density_alcohol_ratio = density / (alcohol + 1),
-        quality_score = stars * labelappeal,
-
-        stars_bucket = case_when(
-            stars <= 2 ~ "low",
-            stars == 3 ~ "medium",
-            stars >= 4 ~ "high",
-            TRUE ~ "unknown"
-        )
+  mutate(
+    log_alcohol = log1p(alcohol),
+    log_residual_sugar = log1p(residual_sugar),
+    log_free_sulfur_dioxide = log1p(free_sulfur_dioxide),
+    log_total_sulfur_dioxide = log1p(total_sulfur_dioxide),
+    
+    sulfur_ratio = total_sulfur_dioxide / (free_sulfur_dioxide + 1),
+    acidity_ratio = volatile_acidity / (fixed_acidity + 1),
+    density_alcohol_ratio = density / (alcohol + 1),
+    quality_score = stars * label_appeal,
+    
+    stars_bucket = case_when(
+      stars <= 2 ~ "low",
+      stars == 3 ~ "medium",
+      stars >= 4 ~ "high",
+      TRUE ~ "unknown"
     )
+  )
 
 wine_eval_prep <- wine_eval_prep |>
-    mutate(
-        log_alcohol = log1p(alcohol),
-        log_residualsugar = log1p(residualsugar),
-        log_freesulfurdioxide = log1p(freesulfurdioxide),
-        log_totalsulfurdioxide = log1p(totalsulfurdioxide),
-
-        sulfur_ratio = totalsulfurdioxide / (freesulfurdioxide + 1),
-        acidity_ratio = volatileacidity / (fixedacidity + 1),
-        density_alcohol_ratio = density / (alcohol + 1),
-        quality_score = stars * labelappeal,
-
-        stars_bucket = case_when(
-            stars <= 2 ~ "low",
-            stars == 3 ~ "medium",
-            stars >= 4 ~ "high",
-            TRUE ~ "unknown"
-        )
+  mutate(
+    log_alcohol = log1p(alcohol),
+    log_residual_sugar = log1p(residual_sugar),
+    log_free_sulfur_dioxide = log1p(free_sulfur_dioxide),
+    log_total_sulfur_dioxide = log1p(total_sulfur_dioxide),
+    
+    sulfur_ratio = total_sulfur_dioxide / (free_sulfur_dioxide + 1),
+    acidity_ratio = volatile_acidity / (fixed_acidity + 1),
+    density_alcohol_ratio = density / (alcohol + 1),
+    quality_score = stars * label_appeal,
+    
+    stars_bucket = case_when(
+      stars <= 2 ~ "low",
+      stars == 3 ~ "medium",
+      stars >= 4 ~ "high",
+      TRUE ~ "unknown"
     )
+  )
 
 # Convert categorical bucket to dummy variables
 wine_train_prep <- fastDummies::dummy_cols(
-    wine_train_prep,
-    select_columns = "stars_bucket",
-    remove_selected_columns = TRUE,
-    remove_first_dummy = TRUE
+  wine_train_prep,
+  select_columns = "stars_bucket",
+  remove_selected_columns = TRUE,
+  remove_first_dummy = TRUE
 )
 
 wine_eval_prep <- fastDummies::dummy_cols(
-    wine_eval_prep,
-    select_columns = "stars_bucket",
-    remove_selected_columns = TRUE,
-    remove_first_dummy = TRUE
+  wine_eval_prep,
+  select_columns = "stars_bucket",
+  remove_selected_columns = TRUE,
+  remove_first_dummy = TRUE
 )
 
-# Check for remaining missing values
+# Check for remaining missing values in training data
 wine_train_prep |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
-    filter(Missing > 0)
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
+  filter(Missing > 0)
 
+# Check for remaining missing values in evaluation data
 wine_eval_prep |>
-    summarise(across(everything(), ~ sum(is.na(.)))) |>
-    pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
-    filter(Missing > 0)
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
+  filter(Missing > 0)
 ```
 
 
