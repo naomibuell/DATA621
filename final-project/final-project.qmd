@@ -37,61 +37,52 @@ library(janitor)
 library(pROC)
 library(fastDummies)
 library(tidytable)
+library(stringr)
 ```
 
-# Abstract (Naomi)
-*Use 250 words or less to summarize your problem, methodology, and major outcomes.*
+# Abstract
 
-Background: Opioid addiction is a public health crisis that has affected countless lives. 
- 
-Research Question: What factors are important for predicting prevalence rate of opioid use disorder (OUD)? 
- 
-Methods: We downloaded data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2016–2019 and 2022)...[TBD]
- 
-Results: [TBD]
- 
-Conclusion: [TBD]
+::: callout-note
+**Naomi to complete.** Use 250 words or less.
+:::
 
-# Key words (Naomi)
-*Select a few key words (up to five) related to your work.*
-Opioid Use Disorder, Regression Analysis, Public Health, Substance Abuse
+Background: Opioid addiction is a public health crisis that has affected countless lives.
 
-# Introduction (Naomi)
-*Describe the background and motivation of your problem.*
+Research Question: What factors are important for predicting prevalence rate of opioid use disorder (OUD)?
 
-Opioid addiction is a public health crisis that has affected countless lives. The United States is experiencing a public health crisis of almost unprecedented scale:
-an epidemic of opioid use disorder (OUD) and related overdose deaths, the magnitude of which has increased exponentially in the past decades [@Mancher2019]. In just one year, the age-adjusted rate of drug overdose deaths increased 31% (from 21.6 in 2019 per 100k population to 28.3 in 2020) [@Hedegaard2021]. In this project, we investigate the factors that are important for predicting the prevalence rate of OUD across US states. We use data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2016–2019 and 2022). We also use data on state-level demographic characteristics. We apply regression analysis to identify the key predictors of OUD prevalence and discuss the implications of our findings for public health interventions and policy decisions.
+Methods: We downloaded data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2016–2019 and 2022)...\[TBD\]
 
-# Literature review (Alex)
-*Discuss how other researchers have addressed similar problems, what their achievements are, and what the advantage and drawbacks of each reviewed approach are. Explain how your investigation is similar or different to the state-of-the- art. Please cite the relevant papers where appropriate.*
+Results: \[TBD\]
+
+Conclusion: \[TBD\]
+
+# Key words
+
+Opioid Use Disorder, Regression Analysis, Public Health, Substance Use Disorder
+
+# Introduction
+
+Opioid addiction is a public health crisis that has affected countless lives. The United States is experiencing a public health crisis of almost unprecedented scale: an epidemic of opioid use disorder (OUD) and related overdose deaths, the magnitude of which has increased exponentially in the past decades [@Mancher2019]. In just one year, the age-adjusted rate of drug overdose deaths increased 31% (from 21.6 in 2019 per 100k population to 28.3 in 2020) [@Hedegaard2021]. In this project, we investigate what factors are important for predicting the prevalence rate of OUD across US states. 
+
+# Literature review
+
+::: callout-note
+**Alex to complete.** Discuss how other researchers have addressed similar problems, what their achievements are, and what the advantage and drawbacks of each reviewed approach are. Explain how your investigation is similar or different to the state-of-the- art. Please cite the relevant papers where appropriate.
+:::
 
 Example citation [@Volkow2019].
 
 # Methodology
-*Discuss the key aspects of your problem, data set and regression model(s). Given that you are working on real-world data, explain at a high-level your exploratory data analysis, how you prepared the data for regression modeling, your process for building regression models, and your model selection.*
+
+::: callout-note
+Discuss the key aspects of your problem, data set and regression model(s). Given that you are working on real-world data, explain at a high-level your exploratory data analysis, how you prepared the data for regression modeling, your process for building regression models, and your model selection.
+:::
+
+We use data on the state-level prevalence of pain reliever misuse and demographic characteristics from the National Survey on Drug Use and Health (NSDUH) from the Substance and Mental Health Services Administration for 2018-2024 [@NSDUH2018-2019].
 
 ## Exploratory Data Analysis (Naomi)
 
-```{r}
-#| label: load-data
-
-# Read in all CSVs from the data directory and store them in a list
-filepaths <- list.files(path = "final-project/data", pattern = "*.csv", full.names = TRUE)
-data_list <- lapply(filepaths, read_csv)
-names(data_list) <- filepaths |>
-  basename() |>
-  gsub("\\.csv$", "", x = _) |>
-  make_clean_names()
-
-# Save the data frames in the global environment with names based on the file names
-list2env(data_list, .GlobalEnv)
-
-```
-
-```{r}
-#| label: merge-data
-
-```
+We performed exploratory data analysis to understand the distribution of our outcome variable (prevalence of pain reliever misuse) and the relationships between our predictors and the outcome. We visualized the distribution of the outcome variable across states and years, and we examined correlations between predictors and the outcome variable.
 
 ## Data Preparation methods (Alex)
 
@@ -102,9 +93,203 @@ list2env(data_list, .GlobalEnv)
 ## Select models methods (Said)
 
 # Experimentation and Results
-*Describe the specifics of what you did (data exploration, data preparation, model building, model selection, model evaluation, etc.), and what you found out (statistical analyses, interpretation and discussion of the results, etc.).*
+
+::: callout-note
+Describe the specifics of what you did (data exploration, data preparation, model building, model selection, model evaluation, etc.), and what you found out (statistical analyses, interpretation and discussion of the results, etc.).
+:::
+
+```{r}
+#| label: load-join-data
+
+# Read in all CSVs from the data directory and store them in a list
+filepaths <- list.files(path = "data", pattern = "*.csv", full.names = TRUE)
+
+# Helper to extract the "YY-YY" year substring from filenames
+extract_year_tag <- function(path) {
+  fname <- basename(path)
+  tag <- stringr::str_extract(fname, "\\d{2}-\\d{2}")
+  if (is.na(tag)) tag <- gsub("\\.csv$", "", fname)
+  tag
+}
+
+# Read each file and add a 'year' column based on the filename (e.g. "18-19")
+data_list <- lapply(filepaths, function(fp) {
+  df <- readr::read_csv(fp, show_col_types = FALSE) |> 
+    janitor::clean_names()
+  
+  # Get name of first column (variable of interest)
+  first_col <- names(df)[1]
+
+  # Transform each df.
+  df <- df |> 
+    # Filter out redundant ("Overall") rows
+    filter(
+      state_us_abbreviation != "Overall") |>
+
+    # Calculate precise percentages
+    group_by(state_us_abbreviation) |>
+    mutate(
+      denominator = weighted_count[column_percent == 1]
+    ) |>
+    ungroup() |> 
+    mutate(
+      percent = weighted_count / denominator
+    ) |> 
+
+    # Get subset of columns
+    select(1, state_us_abbreviation, percent) |> 
+
+    # Pivot first column wider
+    mutate(
+      !!first_col := paste0(first_col, "_", as.character(.data[[first_col]])),
+    ) |>
+    pivot_wider(names_from = 1, values_from = percent) |> 
+
+    # Drop columns with all the same values
+    select(where(~ n_distinct(.) > 1)) |>
+
+    # Add year column
+    mutate(
+      year = extract_year_tag(fp)
+    ) |>
+
+    # Clean names
+    janitor::clean_names()
+
+  df
+})
+
+# Get list of data years
+years <- sapply(filepaths, extract_year_tag) |> unique()
+
+# Iterate across years, join data frames in data_list by state and year within each year.
+yearly_joined_data <- lapply(years, function(yr) {
+  year_dfs <- data_list |>
+    purrr::keep(~ dplyr::n_distinct(.x$year) == 1 && .x$year[[1]] == yr)
+
+  if (length(year_dfs) == 0) return(NULL)
+  if (length(year_dfs) == 1) return(year_dfs[[1]])
+
+  Reduce(function(x, y) full_join(x, y, by = c("state_us_abbreviation", "year")), year_dfs)
+})
+
+# Append yearly_joined_data across all years into a single data frame
+# Filter out NULL values first to avoid bind_rows errors
+df <- yearly_joined_data |> 
+  purrr::discard(is.null) |>
+  bind_rows()
+```
+
+```{r}
+#| label: rename-columns
+
+df_renamed <- df |> 
+  rename(
+    state = state_us_abbreviation,
+
+    age_12_17 = rc_adult_age_category_recode_5_12_17_years_old,
+    age_18_25 = rc_adult_age_category_recode_1_18_25_years_old,
+    age_26_34 = rc_adult_age_category_recode_2_26_34_years_old,
+    age_35_49 = rc_adult_age_category_recode_3_35_49_years_old,
+    age_50_plus = rc_adult_age_category_recode_4_50_or_older,
+
+    medicaid_coverage = covered_by_medicaid_chip_1_yes,
+
+    less_than_high_school = rc_education_categories_1_less_high_school,
+    high_school = rc_education_categories_2_high_school_grad,
+    some_college = rc_education_categories_3_some_coll_assoc_dg,
+    college_grad = rc_education_categories_4_college_graduate,
+
+    emp_full_time = employment_status_imputation_revised_1_employed_full_time,
+    emp_part_time = employment_status_imputation_revised_2_employed_part_time,
+    emp_unemployed = employment_status_imputation_revised_3_unemployed,
+
+    pain_relievers_misuse = rc_pain_relievers_past_year_misuse_1_misused_within_the_past_year,
+
+    race_nh_white = rc_race_recode_4_levels_1_white_not_hispanic,
+    race_nh_black = rc_race_recode_4_levels_2_black_not_hispanic,
+    race_hisp = rc_race_recode_4_levels_4_hispanic,
+    race_other = rc_race_recode_4_levels_3_other_or_multiple_not_hispanic,
+
+    poverty = rc_poverty_level_new_inc_percent_of_us_census_poverty_threshold_1_living_in_poverty,
+    poverty_2x = rc_poverty_level_new_inc_percent_of_us_census_poverty_threshold_2_income_up_to_2x_fed_pov_thresh,
+    poverty_2x_plus = rc_poverty_level_new_inc_percent_of_us_census_poverty_threshold_3_income_more_than_2x_fed_pov_thresh
+  ) |> 
+
+  select(
+    state,
+    year,
+    pain_relievers_misuse,
+    age_12_17, age_18_25, age_26_34, age_35_49, age_50_plus,
+    medicaid_coverage,
+    less_than_high_school, high_school, some_college, college_grad,
+    emp_full_time, emp_part_time, emp_unemployed,
+    race_nh_white, race_nh_black, race_hisp, race_other,
+    poverty, poverty_2x, poverty_2x_plus
+  )
+```
 
 ## Exploratory Data Analysis (Naomi)
+
+```{r}
+#| label: data-exploration
+#| include: false
+
+# Count rows and columns
+nrows <- df_renamed |> nrow()
+ncols <- df_renamed |> length()
+
+# Get missingness
+perc_complete <- round(df_renamed |> n_complete() / nrows / ncols * 100, 2)
+```
+
+The data set contains `r nrows` state-year rows and `r ncols` features, and is `r perc_complete` percent complete. The data are all numeric, and the target variable is `pain_relievers_misuse`, which represents the percentage of individuals who misused pain relievers in the past year. The other variables represent various demographic and socioeconomic characteristics of people surveyed in the state and year. See @tbl-summary-statistics for descriptive characteristics of the data.
+
+```{r}
+#| label: tbl-summary-statistics
+#| tbl-cap: "Summary statistics for all variables in the dataset"
+#| echo: true
+
+tbl_summ_stats <- df_renamed |> skim_without_charts() |> janitor::clean_names() |> as_tibble() |>
+    rename(Variable = skim_variable, "Completeness rate" = complete_rate, "Mean" = numeric_mean, "SD" = numeric_sd, "P50" = numeric_p50, "Min" = numeric_p0, "P25" = numeric_p25, "P75" = numeric_p75, "Max" = numeric_p100) |>
+    select(Variable, "Completeness rate", Mean, Min, P25, P50, P75, Max) |>
+    mutate(across(where(is.numeric), ~ signif(., 2))) |> knitr::kable()
+
+tbl_summ_stats
+```
+
+```{r}
+#| label: fig-correlation-matrix
+#| fig-cap: "Correlation matrix of all non-ID variables in the dataset. Correlations < 0.05 are suppressed."
+#| fig.align: "center"
+#| echo: true
+#| warning: false
+
+# Get correlation matrix
+df_renamed_cor <- df_renamed |>
+  select(-state, -year) |>
+  cor(use = "pairwise.complete.obs")
+
+# Suppress small correlations by setting them to NA so corrplot leaves them blank
+df_renamed_cor[abs(df_renamed_cor) < 0.05] <- NA
+
+corrplot(df_renamed_cor, method = "circle", type = "upper", tl.cex = 0.4, insig = "blank", na.label = " ", addCoef.col = "black", number.cex = 0.3, tl.srt = 45)
+
+most_corr_w_target <- df_renamed_cor |>
+    as.data.frame() |>
+    rownames_to_column(var = "Variable") |>
+    filter(Variable != "pain_relievers_misuse") |>
+    transmute(
+        Variable,
+        Correlation = pain_relievers_misuse,
+        Abs_Correlation = abs(pain_relievers_misuse)
+    ) |>
+    arrange(desc(Abs_Correlation)) |>
+    filter(Abs_Correlation > 0.05) |> 
+    pull(Variable)
+```
+
+The correlation between all variables are shown in @fig-correlation-matrix. The following predictors are most correlated with the target variable: `r paste(most_corr_w_target, collapse = ", ")`, which may be predictors of pain reliever misuse.
 
 ## Results of Data Preparation (Alex)
 
@@ -115,6 +300,7 @@ list2env(data_list, .GlobalEnv)
 ## Results of model selection (Said)
 
 # Discussion and Conclusions (Naomi)
+
 *Conclude your findings, limitations, and suggest areas for future work.*
 
 # References
