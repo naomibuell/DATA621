@@ -39,8 +39,9 @@ library(fastDummies)
 library(tidytable)
 library(readr)
 library(dplyr)
-library(MASS)  # For glm.nb (Negative Binomial)
-
+library(MASS)
+library(car)
+library(glmnet)
 ```
 
 # Introduction
@@ -76,8 +77,17 @@ tbl_summ_stats <- wine_train |>
     skim_without_charts() |>
     janitor::clean_names() |>
     as_tibble() |>
-    rename(Variable = skim_variable, "Completeness rate" = complete_rate, "Mean" = numeric_mean, "SD" = numeric_sd, "P50" = numeric_p50, "Min" = numeric_p0, "P25" = numeric_p25, "P75" = numeric_p75, "Max" = numeric_p100) |>
-    select(Variable, "Completeness rate", Mean, Min, P25, P50, P75, Max) |>
+    rename(
+      Variable = skim_variable, 
+      "Completeness rate" = complete_rate, 
+      "Mean" = numeric_mean, 
+      "SD" = numeric_sd, 
+      "P50" = numeric_p50, 
+      "Min" = numeric_p0, 
+      "P25" = numeric_p25, 
+      "P75" = numeric_p75, 
+      "Max" = numeric_p100) |>
+    dplyr::select(Variable, "Completeness rate", Mean, Min, P25, P50, P75, Max) |>
     mutate(
         across(where(is.numeric), ~ signif(., 2)),
         Mean = format(Mean, scientific = FALSE, trim = TRUE)
@@ -99,7 +109,7 @@ tbl_summ_stats
 
 # Get correlation matrix
 wine_train_cor <- wine_train |>
-    select(where(is.numeric)) |> 
+    dplyr::select(where(is.numeric)) |> 
     cor(use = "pairwise.complete.obs")
 
 wine_train_cor_plot <- wine_train_cor
@@ -138,11 +148,11 @@ Lastly, we also looked at the distribution of each variable to check for skewnes
 
 # Keep only continuous
 continuous_vars <- wine_train |>
-    select(where(is.numeric), -INDEX) |>
+    dplyr::select(where(is.numeric), -INDEX) |>
     names()
 
 wine_train |>
-    select(all_of(continuous_vars)) |>
+    dplyr::select(all_of(continuous_vars)) |>
     pivot_longer(cols = everything(), names_to = "variable", values_to = "value") |>
     ggplot(aes(x = value)) +
     geom_histogram(bins = 30, fill = "steelblue", color = "white") +
@@ -176,26 +186,22 @@ Finally, the cleaned training and evaluation datasets were stored as `wine_train
 #| echo: true
 #| eval: true
 
-library(tidyverse)
-library(janitor)
-library(fastDummies)
-
 # Remove INDEX variable and clean column names
 wine_train_prep <- wine_train |> 
   clean_names() |> 
-  select(-any_of("index"))
+  dplyr::select(-any_of("index"))
 
 wine_eval_prep <- wine_eval |> 
   clean_names() |> 
-  select(-any_of("index"))
+  dplyr::select(-any_of("index"))
 
 # Identify numeric predictors
 numeric_vars <- wine_train_prep |>
-  select(where(is.numeric)) |>
-  select(-target) |>
+  dplyr::select(where(is.numeric)) |>
+  dplyr::select(-target) |>
   names()
 
-# Create missingness flags
+# 1. Create missingness flags (MUST be done before we overwrite the NAs)
 wine_train_prep <- wine_train_prep |>
   mutate(across(
     all_of(numeric_vars),
@@ -210,7 +216,9 @@ wine_eval_prep <- wine_eval_prep |>
     .names = "{.col}_missing"
   ))
 
-# Median imputation
+# 2. MEDIAN IMPUTATION (Moved up!)
+# We impute the base variables first, so that when we engineer new features
+# in the next step, there are no NAs to break the math.
 for (v in numeric_vars) {
   med_val <- median(wine_train_prep[[v]], na.rm = TRUE)
   
@@ -218,17 +226,24 @@ for (v in numeric_vars) {
   wine_eval_prep[[v]][is.na(wine_eval_prep[[v]])] <- med_val
 }
 
-# Transformations and feature engineering
+# 3. Calculate the minimums from the TRAINING data (now that data is imputed)
+min_alc <- min(wine_train_prep$alcohol, na.rm = TRUE)
+min_sugar <- min(wine_train_prep$residual_sugar, na.rm = TRUE)
+min_fsd <- min(wine_train_prep$free_sulfur_dioxide, na.rm = TRUE)
+min_tsd <- min(wine_train_prep$total_sulfur_dioxide, na.rm = TRUE)
+
+# 4. Transformations and feature engineering
 wine_train_prep <- wine_train_prep |>
   mutate(
-    log_alcohol = log1p(alcohol),
-    log_residual_sugar = log1p(residual_sugar),
-    log_free_sulfur_dioxide = log1p(free_sulfur_dioxide),
-    log_total_sulfur_dioxide = log1p(total_sulfur_dioxide),
+    # Shift values by subtracting the minimum before applying log1p
+    log_alcohol = log1p(alcohol - min_alc),
+    log_residual_sugar = log1p(residual_sugar - min_sugar),
+    log_free_sulfur_dioxide = log1p(free_sulfur_dioxide - min_fsd),
+    log_total_sulfur_dioxide = log1p(total_sulfur_dioxide - min_tsd),
     
-    sulfur_ratio = total_sulfur_dioxide / (free_sulfur_dioxide + 1),
-    acidity_ratio = volatile_acidity / (fixed_acidity + 1),
-    density_alcohol_ratio = density / (alcohol + 1),
+    sulfur_ratio = total_sulfur_dioxide / ifelse(free_sulfur_dioxide + 1 == 0, 0.001, free_sulfur_dioxide + 1),
+    acidity_ratio = volatile_acidity / ifelse(fixed_acidity + 1 == 0, 0.001, fixed_acidity + 1),
+    density_alcohol_ratio = density / ifelse(alcohol + 1 == 0, 0.001, alcohol + 1),
     quality_score = stars * label_appeal,
     
     stars_bucket = case_when(
@@ -241,10 +256,11 @@ wine_train_prep <- wine_train_prep |>
 
 wine_eval_prep <- wine_eval_prep |>
   mutate(
-    log_alcohol = log1p(alcohol),
-    log_residual_sugar = log1p(residual_sugar),
-    log_free_sulfur_dioxide = log1p(free_sulfur_dioxide),
-    log_total_sulfur_dioxide = log1p(total_sulfur_dioxide),
+    # Apply the exact same training minimums to the evaluation set
+    log_alcohol = log1p(alcohol - min_alc),
+    log_residual_sugar = log1p(residual_sugar - min_sugar),
+    log_free_sulfur_dioxide = log1p(free_sulfur_dioxide - min_fsd),
+    log_total_sulfur_dioxide = log1p(total_sulfur_dioxide - min_tsd),
     
     sulfur_ratio = total_sulfur_dioxide / (free_sulfur_dioxide + 1),
     acidity_ratio = volatile_acidity / (fixed_acidity + 1),
@@ -259,7 +275,7 @@ wine_eval_prep <- wine_eval_prep |>
     )
   )
 
-# Convert categorical bucket to dummy variables
+# 5. Convert categorical bucket to dummy variables
 wine_train_prep <- fastDummies::dummy_cols(
   wine_train_prep,
   select_columns = "stars_bucket",
@@ -274,31 +290,18 @@ wine_eval_prep <- fastDummies::dummy_cols(
   remove_first_dummy = TRUE
 )
 
-# Check for remaining missing values in training data
+# 6. Check for remaining missing values in training data
 wine_train_prep |>
   summarise(across(everything(), ~ sum(is.na(.)))) |>
   pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
   filter(Missing > 0)
 
-# Check for remaining missing values in evaluation data
+# 7. Check for remaining missing values in evaluation data
 wine_eval_prep |>
   summarise(across(everything(), ~ sum(is.na(.)))) |>
   pivot_longer(everything(), names_to = "Variable", values_to = "Missing") |>
   filter(Missing > 0)
 ```
-
-
-
-## Data Splits
-
-First, we will split our dataset into a training and testing set. We will use the training set to build our models and the testing set to evaluate their performance. The training set will be used to fit the models, while the testing set will be used to assess how well the models generalize to new data.
-
-```{r}
-#| label: split-data
-#| eval: false
-
-
-
 
 
 # Assumptions for Count Regression Model 
@@ -370,7 +373,7 @@ key_vars <- c("stars", "label_appeal", "acid_index", "alcohol")
 
 wine_train_prep |>
   mutate(log_target = log1p(target)) |>
-  select(log_target, all_of(key_vars)) |>
+  dplyr::select(log_target, all_of(key_vars)) |>
   pivot_longer(cols = all_of(key_vars), names_to = "variable", values_to = "value") |>
   mutate(bin = cut(value, breaks = 10)) |>
   group_by(variable, bin) |>
@@ -399,9 +402,6 @@ Count regression models, like all generalized linear models, are sensitive to hi
 #| tbl-cap: "Variance Inflation Factors (VIF) for key predictors in a baseline Poisson model"
 #| warning: false
 #| echo: true
-
-library(car)
-
 baseline_formula <- target ~ stars + label_appeal + acid_index + alcohol +
                              volatile_acidity + total_sulfur_dioxide +
                              residual_sugar + chlorides + density + p_h
@@ -440,32 +440,53 @@ knitr::kable(deviance_check)
 A deviance-to-df ratio near 1.0 is consistent with a well-fitting Poisson model. Ratios substantially above 1.0 confirm overdispersion and support transitioning to a Negative Binomial or zero-inflated model in the modeling section. The deviance-to-df ratio of **1.443** confirms overdispersion in the baseline Poisson model — the residual deviance (18,452.11) substantially exceeds the degrees of freedom (12,784). This is consistent with our earlier finding that the variance exceeds the mean, and reinforces that a standard Poisson model is not the most appropriate fit for this data. A Negative Binomial or zero-inflated specification will be better suited to account for this excess variation in the modeling section.
 
 
-
-
-
-
-
 # Build models
 
 ## Modeling Plan
 
-We follow a workflow centered on building valid models and assessing predictive performance, as emphasized in our primary texts:
+We follow a workflow centered on building valid models:
 
-Partitioning: Following AMAR Section 7.3, we split data into a training set for model development and a test set for assessing predictive ability. LMR Section 9.1 also notes the use of a validation sample to avoid over-estimation of model quality.
+1. Partitioning: We split data into a training set for model development and a test set for assessing predictive ability.
 
-Poisson GLM: While LMR Section 1.3 identifies Poisson regression as a key extension for count responses, it primarily focuses on Gaussian linear models. We use the Pearson dispersion check to verify the model's validity.
+2. Poisson GLM: Because our target variable is a count of cases purchased, we utilize Poisson regression. We will use the Pearson dispersion check to verify the model's validity and check for overdispersion.
 
-Lasso Penalization: We implement LASSO as a modern development for variable selection
+3. Lasso Penalization: We implement LASSO as a modern development for robust variable selection and handling multicollinearity.
+
+## Data Splits
+
+```{r}
+#| label: split-data
+#| eval: true
+
+# Set a seed for reproducibility so you get the same split every time
+set.seed(19940211)
+
+# Calculate how many rows make up 80% of the dataset
+train_size <- floor(0.80 * nrow(wine_train_prep))
+
+# Randomly select row numbers for the training set
+train_indices <- sample(seq_len(nrow(wine_train_prep)), size = train_size)
+
+# Subset the dataset based on those row numbers
+wine_train_split <- wine_train_prep[train_indices, ]
+wine_test_split <- wine_train_prep[-train_indices, ]
+```
+
+
+## Model 1. Full Model (All untransformed variables)
+
+For our baseline model, we include all available predictor variables in their original, untransformed state. Because our `target` variable represents a count (number of cases purchased), we use a Poisson Generalized Linear Model (`family = "poisson"`).
+
+This full model gives us a starting point to assess the baseline residual deviance, identify which predictors show initial statistical significance, and check for potential overdispersion before we attempt dimensionality reduction.
 
 ```{r}
 #| label: build-model1
-#| eval: false
+#| eval: true
 
 model1 <- glm(
-    formula = target ~ zn + indus + chas + nox + rm + age + dis + rad + tax +
-        ptratio + lstat + medv,
-    family = "binomial",
-    data = crime_train_split
+    formula = target ~ .,
+    family = "poisson",
+    data = wine_train_split
 )
 
 summary(model1)
@@ -473,51 +494,85 @@ summary(model1)
 
 ## Model 2. Reduce multicollinearity
 
-In the Data Exploration section, we showed that `rad` and `tax` were strongly correlated (r=0.91), which suggests that only one of these variables is needed in Model 1 (we chose to retain `rad` as it was more highly significant). Similarly, `medv` was shown to be potentially multicollinear with `lstat` (r=0.74) and `rm` (r=0.71), so we removed the latter variables.
+Our dataset contains several engineered variables that are direct mathematical combinations of base variables (e.g., `quality_score` is the product of `stars` and `label_appeal`; `sulfur_ratio` is derived from total and free sulfur dioxide). Including both the original base variables and their direct mathematical combinations can cause severe multicollinearity, which artificially inflates the standard errors of our coefficients.
 
-In addition, the correlation between `nox` (predictor) and `target` (response) suggests that `nox` is an important predictor, so we removed its potential collinear pairs `age` and `dis`. Although `nox` was moderately correlated with `indus` (r=0.76), we retained `indus` because removal of both `indus` and `tax` (highly correlated with `rad`) would eliminate a potentially informative predictor.
-
-These changes resulted in a model with AIC `r\ AIC(model2)`.
+In Model 2, we remove these highly redundant engineered interactions to stabilize our parameter estimates while keeping the primary effects intact.
 
 ```{r}
 #| label: build-model2
-#| eval: false
+#| eval: true
 
+# Fit Poisson model excluding highly collinear engineered features
 model2 <- glm(
-    formula = target ~ zn + indus + chas + nox + rad + ptratio + medv,
-    family = "binomial",
-    data = crime_train_split
+    formula = target ~ . - quality_score - sulfur_ratio - acidity_ratio - density_alcohol_ratio,
+    family = "poisson",
+    data = wine_train_split
 )
 
 summary(model2)
 ```
 
-## Model 3. Backward stepwise variable selection
+## Model 3. Negative Binomial Model
 
-For this model, we performed backward stepwise selection from the set of variables including transformed and newly created variables.
+In our Assumptions section, we calculated a dispersion ratio of 1.225, indicating that the variance of target slightly exceeds its mean. While a standard Poisson model assumes the variance equals the mean, a Negative Binomial model includes an extra parameter to explicitly handle this overdispersion.
 
-The best model had `nox`, `tax_rad_ratio`, `ptratio`, and `age` as the most significant predictors (P\<0.001). In addition, `log_dis` and `rm_lstat_ratio` were significant at the P\<0.05 level. The AIC of this model was `r\ AIC(model3)`, which was lower than that of Models 1 and 2.
+For Model 3, we use the glm.nb() function from the MASS package. We will apply the same reduced feature set used in Model 2 to ensure the model remains stable and free from severe multicollinearity while we test this new distribution.
 
 ```{r}
 #| label: build-model3
-#| eval: false
+#| eval: true
 
-# Full model includes all variables
-model_full <- glm(
-    formula = target ~ log_zn + indus + chas + nox + rm + age +
-        log_dis + log_rad + log_tax + ptratio + log_lstat + medv +
-        nox_indus + rm_lstat_ratio + tax_rad_ratio,
-    family = "binomial",
-    data = crime_train_split
+# Fit a Negative Binomial model to account for mild overdispersion
+model3 <- MASS::glm.nb(
+    formula = target ~ . - quality_score - sulfur_ratio - acidity_ratio - density_alcohol_ratio,
+    data = wine_train_split
 )
-
-# Select variables
-model3 <- step(model_full, direction = "backward")
 
 summary(model3)
 ```
 
-Of these three models, model 3 has the lowest AIC. In the next section, we will evaluate the performance of these models to more determine which one is best for predicting the `target` variable.
+## Model 4. Backward Stepwise Selection
+
+To balance model complexity and goodness-of-fit, we perform backward stepwise selection starting from our Negative Binomial model (`model3`). This algorithm evaluates the model by iteratively removing the least significant predictors based on the Akaike Information Criterion (AIC). It continues this process until it finds the optimal sub-model where removing any more variables would hurt the model's predictive power more than it would help its simplicity.
+
+```{r}
+#| label: build-model4
+
+# Perform backward stepwise selection 
+# (trace = 0 hides the massive console output during the iterative process)
+model4 <- step(model3, direction = "backward", trace = 0)
+
+summary(model4)
+```
+
+## Model 5. LASSO Penalization
+
+Finally, we apply LASSO (Least Absolute Shrinkage and Selection Operator) regression. LASSO applies an L1 penalty to the coefficients, which forces the coefficients of less important variables to shrink exactly to zero. This makes it an excellent, automated method for feature selection and handling multicollinearity.
+
+Unlike standard glm() functions, the glmnet package requires the predictor variables to be formatted as a matrix. We use model.matrix() to automatically handle this conversion, including the creation of dummy variables for our categorical features. We then use cross-validation (cv.glmnet) to find the optimal penalty value (λ) that minimizes our Poisson deviance.
+
+```{r}
+#| label: build-model5
+#| warning: false
+
+# Prepare matrix format required by glmnet (removes the intercept column)
+x_train <- model.matrix(target ~ ., data = wine_train_split)[, -1]
+y_train <- wine_train_split$target
+
+# Fit LASSO Poisson model using cross-validation to find optimal lambda
+set.seed(19940211)
+model5_cv <- glmnet::cv.glmnet(
+    x = x_train, 
+    y = y_train, 
+    family = "poisson", 
+    alpha = 1 # alpha = 1 explicitly specifies LASSO (L1 penalty)
+)
+
+# Extract and display the coefficients at the optimal lambda (minimum deviance)
+# Variables with a '.' have been shrunk to exactly zero and removed by the model
+lasso_coefs <- coef(model5_cv, s = "lambda.min")
+lasso_coefs
+```
 
 # Select Models
 
