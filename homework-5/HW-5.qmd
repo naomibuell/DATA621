@@ -450,8 +450,6 @@ We follow a workflow centered on building valid models:
 
 2. Poisson GLM: Because our target variable is a count of cases purchased, we utilize Poisson regression. We will use the Pearson dispersion check to verify the model's validity and check for overdispersion.
 
-3. Lasso Penalization: We implement LASSO as a modern development for robust variable selection and handling multicollinearity.
-
 ## Data Splits
 
 ```{r}
@@ -543,35 +541,6 @@ To balance model complexity and goodness-of-fit, we perform backward stepwise se
 model4 <- step(model3, direction = "backward", trace = 0)
 
 summary(model4)
-```
-
-## Model 5. LASSO Penalization
-
-Finally, we apply LASSO (Least Absolute Shrinkage and Selection Operator) regression. LASSO applies an L1 penalty to the coefficients, which forces the coefficients of less important variables to shrink exactly to zero. This makes it an excellent, automated method for feature selection and handling multicollinearity.
-
-Unlike standard glm() functions, the glmnet package requires the predictor variables to be formatted as a matrix. We use model.matrix() to automatically handle this conversion, including the creation of dummy variables for our categorical features. We then use cross-validation (cv.glmnet) to find the optimal penalty value (λ) that minimizes our Poisson deviance.
-
-```{r}
-#| label: build-model5
-#| warning: false
-
-# Prepare matrix format required by glmnet (removes the intercept column)
-x_train <- model.matrix(target ~ ., data = wine_train_split)[, -1]
-y_train <- wine_train_split$target
-
-# Fit LASSO Poisson model using cross-validation to find optimal lambda
-set.seed(19940211)
-model5_cv <- glmnet::cv.glmnet(
-    x = x_train, 
-    y = y_train, 
-    family = "poisson", 
-    alpha = 1 # alpha = 1 explicitly specifies LASSO (L1 penalty)
-)
-
-# Extract and display the coefficients at the optimal lambda (minimum deviance)
-# Variables with a '.' have been shrunk to exactly zero and removed by the model
-lasso_coefs <- coef(model5_cv, s = "lambda.min")
-lasso_coefs
 ```
 
 # Select Models
