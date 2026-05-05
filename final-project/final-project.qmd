@@ -80,9 +80,9 @@ Discuss the key aspects of your problem, data set and regression model(s). Given
 
 We use data on the state-level prevalence of pain reliever misuse and demographic characteristics from the National Survey on Drug Use and Health (NSDUH) from the Substance and Mental Health Services Administration for 2018-2024 [@NSDUH2018-2019].
 
-## Exploratory Data Analysis (Naomi)
+## Exploratory Data Analysis
 
-We performed exploratory data analysis to understand the distribution of our outcome variable (prevalence of pain reliever misuse) and the relationships between our predictors and the outcome. We visualized the distribution of the outcome variable across states and years, and we examined correlations between predictors and the outcome variable.
+We performed exploratory data analysis to understand the distribution of our outcome variable (prevalence of pain reliever misuse) and the relationships between our predictors and the outcome. We visualized the correlations between predictors and the outcome variable, as well as the distribution of the numeric variables.
 
 ## Data Preparation methods (Alex)
 
@@ -290,6 +290,35 @@ most_corr_w_target <- df_renamed_cor |>
 ```
 
 The correlation between all variables are shown in @fig-correlation-matrix. The following predictors are most correlated with the target variable: `r paste(most_corr_w_target, collapse = ", ")`, which may be predictors of pain reliever misuse.
+
+Lastly, we also looked at the distribution of each variable to check for skewness and outliers. 
+
+```{r}
+#| label: fig-distributions
+#| fig-cap: "Distribution of numeric variables in the  dataset."
+#| fig.align: "center"
+#| fig-width: 10
+#| fig-height: 10
+#| warning: false
+
+# Keep only continuous
+continuous_vars <- df_renamed |>
+    select(where(is.numeric)) |>
+    names()
+
+df_renamed |>
+    select(all_of(continuous_vars)) |>
+    pivot_longer(cols = everything(), names_to = "variable", values_to = "value") |>
+    ggplot(aes(x = value)) +
+    geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+    facet_wrap(~ variable, scales = "free", ncol = 4) +
+    theme_minimal() +
+    theme(panel.grid = element_blank()) +
+    labs(x = NULL, y = "Count")
+
+```
+
+Most variables are approximately normally distributed, except for many of the race indicator variables. The proportion of individuals who are non-white--especially those who are an "other" race besides hispanic, non-hispanic white, or non-hispanic black--are skewed right, mostly close to 0 across states and years, with a few higher outliers. This is expected given the racial demographics of the US. The proportion of individuals who are aged 26-34 also has a few high outliers.
 
 ## Results of Data Preparation (Alex)
 
