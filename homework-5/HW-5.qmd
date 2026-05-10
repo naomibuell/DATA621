@@ -434,6 +434,42 @@ knitr::kable(deviance_check)
 
 A deviance-to-df ratio near 1.0 is consistent with a well-fitting Poisson model. Ratios substantially above 1.0 confirm overdispersion and support transitioning to a Negative Binomial or zero-inflated model in the modeling section. The deviance-to-df ratio of **1.443** confirms overdispersion in the baseline Poisson model — the residual deviance (18,452.11) substantially exceeds the degrees of freedom (12,784). This is consistent with our earlier finding that the variance exceeds the mean, and reinforces that a standard Poisson model is not the most appropriate fit for this data. A Negative Binomial or zero-inflated specification will be better suited to account for this excess variation in the modeling section.
 
+# Assumptions for Linear Regression
+
+From the above, we have already addressed the Independence of Observations through the dataset structure and Multicollinearity using Variance Inflation Factors (VIF). To complete the standard linear regression diagnostic suite as outlined in our primary resources, we must evaluate constant variance, normality of errors, and the identification of influential observations.
+
+1. Constant Variance (Homoscedasticity)
+
+```{r}
+#| label: fig-variance-check
+#| fig-cap: "Standardized Residuals vs. Fitted values and the Scale-Location plot."
+#| echo: true
+#| layout-ncol: 2
+
+# Residuals vs Fitted values: Looking for a 'funnel' shape
+plot(baseline_poisson, which = 1)
+
+# Scale-Location plot: Uses square root of absolute residuals to better detect trends
+plot(baseline_poisson, which = 3)
+```
+
+Based on the Standardized Residuals vs. Fitted values and the Scale-Location plot, the non-linear trend line and the "banded" vertical clusters indicate that the model is failing to capture the discrete nature of the count data, while the upward slope in the scale-location plot confirms heteroscedasticity, where the variance of the errors increases alongside the predicted number of wine cases.
+
+2. Normality of Errors
+
+```{r}
+#| label: fig-normality-check
+#| fig-cap: "Normal Q-Q plot of the residuals."
+#| echo: true
+
+# Normal Q-Q Plot: Points should follow the diagonal line[cite: 1, 2]
+plot(baseline_poisson, which = 2)
+```
+
+Based on the QQ plot, the significant "S-shaped" deviations at both the lower and upper tails indicate that the residuals are not normally distributed, suggesting that the model is struggling to account for both the excess of zeros and the high-volume outliers in the dataset.
+
+Because the fundamental assumptions of constant variance, linearity, and normality are clearly violated, proceeding with a standard linear regression is technically invalid for this data; however, we will proceed with the analysis while remaining cautious of biased p-values, unreliable confidence intervals, and the high likelihood of the model predicting impossible negative values for wine sales.
+
 # Build models
 
 ## Modeling Plan
