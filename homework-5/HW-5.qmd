@@ -132,11 +132,11 @@ most_corr_w_target_flag <- wine_train_cor |>
 
 ```
 
-The correlation between all variables are shown @fig-correlation-matrix. The variables most correlated with `TARGET`, the number of cases purchased, are `r paste(most_corr_w_target_flag, collapse = ", ")`. This means that wines with higher ratings (`STARS`), more appealing labels (`LabelAppeal`), lower acidity (`AcidIndex` and `VolatileAcidity`), higher alcohol content (`Alcohol`), and higher sulfur dioxide levels (`TotalSulfurDioxide`) tend to have higher sales. These variables will be important to consider in our modeling process, as they may have strong predictive power for the target variable. 
+The correlation between all variables are shown @fig-correlation-matrix. The variables most correlated with `TARGET`, the number of cases purchased, are `r paste(most_corr_w_target_flag, collapse = ", ")`. This means that wines with higher ratings (`STARS`), more appealing labels (`LabelAppeal`), lower acidity (`AcidIndex` and `VolatileAcidity`), higher alcohol content (`Alcohol`), and higher sulfur dioxide levels (`TotalSulfurDioxide`) tend to have higher sales. These variables will be important to consider in our modeling process, as they may have strong predictive power for the target variable.
 
 It is important to note that label appeal and star ratings are likely to be highly correlated with each other, which may lead to multicollinearity issues in a regression model. Similarly, `AcidIndex` and `VolatileAcidity` are likely to be correlated, which may also lead to multicollinearity issues. We will need to consider this when selecting variables for our model.
 
-Lastly, we also looked at the distribution of each variable to check for skewness and outliers. 
+Lastly, we also looked at the distribution of each variable to check for skewness and outliers.
 
 ```{r}
 #| label: fig-distributions
@@ -303,8 +303,7 @@ wine_eval_prep |>
   filter(Missing > 0)
 ```
 
-
-# Assumptions for Count Regression Model 
+# Assumptions for Count Regression Model
 
 Count regression models rest on a set of assumptions that must be evaluated before selecting a final modeling approach. In this section, we assess the key assumptions relevant to Poisson regression, Negative Binomial regression, and their zero-inflated variants using the prepared training data.
 
@@ -331,12 +330,11 @@ dispersion_check <- wine_train_prep |>
 knitr::kable(dispersion_check, digits = 3)
 ```
 
-A dispersion ratio substantially greater than 1 indicates overdispersion, which would violate the Poisson equidispersion assumption and favor a Negative Binomial specification instead. The dispersion ratio of 1.225 indicates mild overdispersion in the TARGET variable — the variance (3.711) exceeds the mean (3.029), which violates the Poisson assumption of equidispersion. While the  is not extreme, it is sufficient to suggest that a Negative Binomial model may provide a better fit than a standard Poisson model, as it  accounts for this excess variation. We will evaluate both specifications in the modeling section and select the one that minimizes model deviance and information criteria.
+A dispersion ratio substantially greater than 1 indicates overdispersion, which would violate the Poisson equidispersion assumption and favor a Negative Binomial specification instead. The dispersion ratio of 1.225 indicates mild overdispersion in the TARGET variable — the variance (3.711) exceeds the mean (3.029), which violates the Poisson assumption of equidispersion. While this is not extreme, it is sufficient to suggest that a Negative Binomial model may provide a better fit than a standard Poisson model, as it accounts for this excess variation. We will evaluate both specifications in the modeling section and select the one that minimizes model deviance and information criteria.
 
 ## Excess Zeros
 
 Zero-inflated models (ZIP or ZINB) are appropriate when there is a higher frequency of zero counts than would be expected under a Poisson or Negative Binomial distribution alone. As noted in the Data Exploration section, `TARGET` exhibits a high concentration of zero values. We formally examine this by comparing the observed proportion of zeros against the theoretical proportion expected under a fitted Poisson model.
-
 
 ```{r}
 #| label: tbl-zero-inflation
@@ -354,8 +352,6 @@ knitr::kable(zero_check)
 ```
 
 If the observed proportion of zeros substantially exceeds the Poisson expectation, a zero-inflated model will be required to separately model the excess zero-generating process. The observed zero proportion (21.37%) far exceeds what a Poisson model would predict (4.84%), confirming significant excess zeros in `TARGET`. This suggests that a zero-inflated model such as ZIP or ZINB is likely needed to separately account for the portion of wines that generate no sales regardless of their chemical properties.
-
-
 
 ## Log-Linearity
 
@@ -391,7 +387,6 @@ wine_train_prep |>
 ```
 
 Approximate linearity in each panel supports the log-link assumption. Substantial curvature in any panel would suggest that a transformation or non-linear term for that predictor may be warranted. The log-linearity plots show mixed results across the four key predictors. `label_appeal` displays the clearest log-linear relationship, with mean log(TARGET + 1) rising steadily as label appeal increases, strongly supporting the log-link assumption for this variable. `alcohol` also shows an approximately linear trend with a gradual upward slope, though with minor fluctuations. `stars` shows a positive relationship but with only two visible data points, suggesting limited variation in this discrete variable. `acid_index`, however, shows a non-linear pattern — mean log(TARGET + 1) rises initially before dropping sharply at higher acidity levels — indicating that the log-linearity assumption may not hold for this variable and that a transformation or non-linear term for `acid_index` may improve model fit.
-
 
 ## Multicollinearity
 
@@ -439,16 +434,15 @@ knitr::kable(deviance_check)
 
 A deviance-to-df ratio near 1.0 is consistent with a well-fitting Poisson model. Ratios substantially above 1.0 confirm overdispersion and support transitioning to a Negative Binomial or zero-inflated model in the modeling section. The deviance-to-df ratio of **1.443** confirms overdispersion in the baseline Poisson model — the residual deviance (18,452.11) substantially exceeds the degrees of freedom (12,784). This is consistent with our earlier finding that the variance exceeds the mean, and reinforces that a standard Poisson model is not the most appropriate fit for this data. A Negative Binomial or zero-inflated specification will be better suited to account for this excess variation in the modeling section.
 
-
 # Build models
 
 ## Modeling Plan
 
 We follow a workflow centered on building valid models:
 
-1. Partitioning: We split data into a training set for model development and a test set for assessing predictive ability.
+1.  Partitioning: We split data into a training set for model development and a test set for assessing predictive ability.
 
-2. Poisson GLM: Because our target variable is a count of cases purchased, we utilize Poisson regression. We will use the Pearson dispersion check to verify the model's validity and check for overdispersion.
+2.  Poisson GLM: Because our target variable is a count of cases purchased, we utilize Poisson regression. We will use the Pearson dispersion check to verify the model's validity and check for overdispersion.
 
 ## Data Splits
 
@@ -470,12 +464,11 @@ wine_train_split <- wine_train_prep[train_indices, ]
 wine_test_split <- wine_train_prep[-train_indices, ]
 ```
 
-
-## Model 1. Full Model (All untransformed variables)
+## Model 1. Full Poisson Model (All untransformed variables)
 
 For our baseline model, we include all available predictor variables in their original, untransformed state. Because our `target` variable represents a count (number of cases purchased), we use a Poisson Generalized Linear Model (`family = "poisson"`).
 
-This full model gives us a starting point to assess the baseline residual deviance, identify which predictors show initial statistical significance, and check for potential overdispersion before we attempt dimensionality reduction.
+This full model gives us a starting point to assess the baseline residual deviance, identify which predictors show initial statistical significance, and check for potential overdispersion before we evaluate simpler models.
 
 ```{r}
 #| label: build-model1
@@ -490,7 +483,7 @@ model1 <- glm(
 summary(model1)
 ```
 
-## Model 2. Reduce multicollinearity
+## Model 2. Simplified Poisson Model (Reduce Multicollinearity)
 
 Our dataset contains several engineered variables that are direct mathematical combinations of base variables (e.g., `quality_score` is the product of `stars` and `label_appeal`; `sulfur_ratio` is derived from total and free sulfur dioxide). Including both the original base variables and their direct mathematical combinations can cause severe multicollinearity, which artificially inflates the standard errors of our coefficients.
 
@@ -529,7 +522,7 @@ model3 <- MASS::glm.nb(
 summary(model3)
 ```
 
-## Model 4. Backward Stepwise Selection
+## Model 4. Negative Binomial Model With Backward Stepwise Selection
 
 To balance model complexity and goodness-of-fit, we perform backward stepwise selection starting from our Negative Binomial model (`model3`). This algorithm evaluates the model by iteratively removing the least significant predictors based on the Akaike Information Criterion (AIC). It continues this process until it finds the optimal sub-model where removing any more variables would hurt the model's predictive power more than it would help its simplicity.
 
@@ -543,7 +536,35 @@ model4 <- step(model3, direction = "backward", trace = 0)
 summary(model4)
 ```
 
+## Model 5. Full Multiple Linear Regression Model
+
+Our baseline multiple linear regression model used all un-transformed predictors.
+
+```{r}
+#| label: build-model5
+#| eval: true
+
+model5 <- lm(
+    formula = target ~ .,
+    data = wine_train_split
+)
+
+summary(model5)
+```
+
+## Model 6. Multiple Linear Regression Model With Backward Stepwise Selection
+
+For this model, we performed backward stepwise selection from the full multiple linear regression model to identify the most important predictors.
+
+```{r}
+model6 <- step(model5, direction = "backward", trace = 0)
+
+summary(model6)
+```
+
 # Select Models
+
+We evaluated the performance of the six candidate models using three regression metrics (RMSE, MSE, and MAE) and two goodness-of-fit criteria (AIC and BIC). These metrics were selected to enable comparison of both GLM and multiple linear regression models.
 
 ```{r}
 #| label: model-comparison-table
@@ -551,77 +572,67 @@ summary(model4)
 #| results: asis
 #| eval: false
 
-# Creating a custom helper function to extract all the required metrics
-# explicitly evaluating on the provided training dataset.
-get_logistic_metrics <- function(model, model_name, data, target_var = "target") {
-    # 1. Get predicted probabilities and classes
-    probs <- predict(model, newdata = data, type = "response")
-    preds <- factor(ifelse(probs > 0.5, 1, 0), levels = c(0, 1))
-    actuals <- factor(data[[target_var]], levels = c(0, 1))
+# Create custom helper functions to calculate model performance metrics
+get_performance_metrics <- function(model, model_name, data, target_var = "target") {
+    preds <- predict(model, newdata = data)
+    actuals <- data[[target_var]]
 
-    # 2. Generate Confusion Matrix and derived metrics
-    cm <- confusionMatrix(preds, actuals, positive = "1")
+    # Calculate metrics
+    mse <- mean((actuals - preds)^2)
+    rmse <- sqrt(mse)
+    mae <- mean(abs(actuals - preds))
 
-    # 3. Calculate AUC
-    roc_obj <- roc(data[[target_var]], probs, quiet = TRUE)
-    auc_val <- as.numeric(pROC::auc(roc_obj))
-
-    # 4. Return results as a tibble
     tibble(
         Model = model_name,
-        Deviance = model$deviance,
-        Accuracy = cm$overall["Accuracy"],
-        Error_Rate = 1 - cm$overall["Accuracy"],
-        Precision = cm$byClass["Precision"],
-        Sensitivity = cm$byClass["Sensitivity"], # Also Recall
-        Specificity = cm$byClass["Specificity"],
-        F1 = cm$byClass["F1"],
-        AUC = auc_val,
+        MSE = mse,
+        RMSE = rmse,
+        MAE = mae,
         AIC = AIC(model),
         BIC = BIC(model)
     )
 }
 
+# Evaluate models
 models_list <- list(
-    "All Untransformed Variables" = model1,
-    "Reducing Multicollinearity" = model2,
-    "Full Model with Backward Selection" = model_full
+    "Full Poisson Model" = model1,
+    "Simplified Poisson Model" = model2,
+    "Negative Binomial Model" = model3,
+    "Negative Binomial Model with Backward Selection" = model4,
+    "Full Multiple Linear Regression Model" = model5,
+    "Stepwise Multiple Linear Regression Model" = model6
 )
 
-# Apply the function to all three models, explicitly passing the training split
+# Apply the performance evaluation function using test data
 model_comparison <- imap_dfr(models_list, ~ {
-    get_logistic_metrics(.x, .y, crime_test_split)
-}) |>
-    arrange(`Deviance`)
+    get_performance_metrics(.x, .y, wine_test_split)
+}) |> arrange(desc(RMSE))
 
 # Transpose the data and convert to a data frame
 model_t <- as.data.frame(t(model_comparison))
 
-# 3. Display the table
+# Display the results dataframe
 knitr::kable(
     model_t,
     digits = 4,
-    caption = "Evaluation of Candidate Models on Training Dataset"
+    caption = "Performance of Candidate Models on Test Dataset"
 )
-
-best_model_info <- model_comparison |> slice(1)
-
-best_model_obj <- models_list[[best_model_info$Model]]
 ```
 
-For the logistic models, we decided to use the deviance as our primary criterion on the training dataset, which was attained by the `best_model_info$Model`. We've chosen deviance as our primary metric because it directly measures the goodness of fit for logistic regression models, with lower deviance indicating a better fit to the training data. Given our model results, each model had a fairly similar accuracy with our `best_model_info$Model` having the highest accuracy of `round(best_model_info$Accuracy, 3)`. It also had the lowest error rate of `round(best_model_info$Error_Rate, 3)` and was comparable with the other top models in sensitivity and specificity. Overall, this model had the best balance of fit and predictive performance on the training data, which is why we selected it for further evaluation on the test set and for generating predictions on the evaluation set.
+Overall, the multiple linear regression models performed better than the count regression models. In particular, the stepwise multiple linear regression model had the lowest AIC and BIC scores, indicating that it is the most parsimonious model. Although its RMSE, MSE, and MAE were marginally higher than those of the full multiple linear regression model, the stepwise linear model is preferred because it is a simpler model.
 
-Given that our target variable was fairly balanced (49% of all observations had a target value of 1), and our accuracy, Precision, and Sensitivity show that we greatly outperform a random classifier, we are confident that our model is performing well.
+However, because we need to deploy a count regression model (per assignment instructions), we select the negative binomial model as the final model. Since all of the candidate count regression models had similar performance metrics, we made this decision based on the known robustness of the negative binomial to overdispersion, which we observed during data exploration.
 
 ```{r}
-#| label: stepwise-model-summary
+#| label: neg-binomial-model-summary
 #| echo: true
 #| eval: false
-# Display the summary of the selected Stepwise model to interpret coefficients and significance
-summary(best_model_obj)
+# Display the summary of the negative binomial model to interpret coefficients and significance
+summary(model3)
 ```
 
-To make inferences from our top performing model, we can look at the significance of the predictors. The logistic regression model identifies several key environmental and structural factors that significantly predict whether a suburb's crime rate will exceed the median. The most dominant predictor is the concentration of nitrogen oxides (nox), where higher levels are strongly associated with a higher probability of the area being high-crime (z=4.670,p\<0.001). Additionally, the pupil-teacher ratio (ptratio) and the proportion of older homes (age) built before 1940 are both significant positive predictors, suggesting that areas with crowded schools and aging infrastructure are more likely to see elevated crime rates. The model also highlights that as the distance to employment centers (log_dis) increases, so does the likelihood of high crime, along with a significant effect from the ratio of rooms to lower-status population (rm_lstat_ratio). Interestingly, many traditional economic indicators, such as median home values (medv), property tax rates (log_tax), and zoning for large lots (log_zn), did not reach statistical significance, indicating that in this specific dataset, industrial and demographic markers are more reliable indicators of crime than general wealth or proximity to the Charles River.
+To make inferences from the negative binomial model, we can look at the significance of the predictors. Significant predictors of the number of wine cases purchased include wine acidity (`volatile_acidity` and `acid_index`), `label_appeal`, and expert ratings (`stars`, `stars_missing`, `stars_bucket_low`, and `stars_bucket_medium`), which were all significant at or below the 0.001 level. In addition, `chlorides` and `sulphates` were significant at the 0.01 and 0.05 level, respectively. These predictors are consistent with scientific knowledge and business experience, since acidity, chlorides, and sulphates are known to influence wine flavors,[^1] and product labels and ratings are known to influence the sales of many products. Ultimately, people tend to buy more of what they like and what others recommend.
+
+[^1]: Crook C. (2024). Fine-tune your wine. Perfecting water composition. <https://www.murphyandson.co.uk/fine-tune-your-wine-perfecting-water-composition/>
 
 # Results
 
@@ -629,27 +640,31 @@ To make inferences from our top performing model, we can look at the significanc
 #| label: predictions-on-eval-set
 #| echo: true
 #| eval: false
-# Generate predictions on the evaluation dataset using the selected model
-eval_predictions <- predict(best_model_obj, newdata = crime_eval_clean, type = "response")
+# Generate predictions on the evaluation dataset using the selected negative binomial model
+eval_predictions <- predict(model3, newdata = wine_eval_prep, type = "response")
 
-crime_eval_results <- crime_eval_clean |>
-    mutate(
-        # If probability > 0.5, it's a 1 (high crime), otherwise 0
-        PREDICTED_TARGET = ifelse(eval_predictions > 0.5, 1, 0)
+# Create results dataframe
+wine_eval_results <- wine_eval_prep |>
+  dplyr::select(-c(target)) |>
+  mutate(
+    PREDICTED_TARGET = floor(eval_predictions)
+  )
+
+# Write predictions to csv file
+write_csv(wine_eval_results, "wine_evaluation_predictions.csv")
+
+# Display the first 10 predictions with key significant predictors from the negative binomial model
+wine_eval_results |>
+    dplyr::select(volatile_acidity, acid_index, chlorides, sulphates,
+                  label_appeal, stars, PREDICTED_TARGET) |>
+    head(10) |>
+    knitr::kable(
+      caption = "Excerpts of Negative Binomial Model Predictions for Evaluation Set"
     )
-
-# Write predictions to a csv
-write_csv(crime_eval_results, "crime_evaluation_predictions.csv")
-
-# Display the first 10 predictions in the rendered PDF
-knitr::kable(
-    head(crime_eval_results |> select(PREDICTED_TARGET), 10),
-    caption = "Excerpts of Stepwise Model Win Predictions for Evaluation Set"
-)
 ```
 
-Given our evaluation set and our stepwise model, we are able to create predictions on the evaluation set on which neighborhoods are classified as high-crime or low-crime. The first 10 predictions are shown in the table above. We write these predictions to a CSV file for submission.
+Given our evaluation set and our negative binomial model, we are able to predict the number of wine cases that will be purchased. The first 10 predictions are shown in the table above (see CSV file included with assignment submission for all predictions). The predicted number of cases purchased (PREDICTED_TARGET) is consistent with expectations. For example, we would expect that fewer cases of wines with relatively low label appeal or expert ratings (stars) would be sold than those with high label appeal or expert ratings.
 
 # Conclusion
 
-In conclusion, our `best_model_info$Model` model, which was selected based on deviance and other performance metrics, demonstrates strong predictive capabilities for classifying neighborhoods as high-crime or low-crime based on a variety of environmental and structural factors. The significant predictors identified in the model provide valuable insights into the underlying drivers of crime in urban areas, highlighting the importance of air pollution, school crowding, aging infrastructure, and proximity to employment centers. These findings can inform policymakers and community leaders in their efforts to target interventions and allocate resources effectively to reduce crime rates. Future work could explore additional modeling techniques, such as regularization or ensemble methods, to further enhance predictive performance and interpretability.
+In conclusion, we selected the negative binomial model as the optimal count regression model for the wine data based on a combination of model performance and robustness to overdispersion effects, which we observed in the data. The significant predictors in this model suggest that the number of cases of wine purchased (target variable) is driven by several chemical properties of wine that likely influence its taste as well as the appeal of the product label and expert ratings. These inferences are also consistent with those from the stepwise multiple linear regression model, which had the best overall performance even though it was not a deployable model. The consistency among significant predictors from multiple models strengthens the hypothesis that these are important factors of wine sales. These findings could help wine stores and restaurants optimize sales, orders, and inventory for different wines.
