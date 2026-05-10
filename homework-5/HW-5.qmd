@@ -570,7 +570,7 @@ We evaluated the performance of the six candidate models using three regression 
 #| label: model-comparison-table
 #| echo: true
 #| results: asis
-#| eval: false
+#| eval: true
 
 # Create custom helper functions to calculate model performance metrics
 get_performance_metrics <- function(model, model_name, data, target_var = "target") {
@@ -625,7 +625,7 @@ However, because we need to deploy a count regression model (per assignment inst
 ```{r}
 #| label: neg-binomial-model-summary
 #| echo: true
-#| eval: false
+#| eval: true
 # Display the summary of the negative binomial model to interpret coefficients and significance
 summary(model3)
 ```
@@ -639,7 +639,7 @@ To make inferences from the negative binomial model, we can look at the signific
 ```{r}
 #| label: predictions-on-eval-set
 #| echo: true
-#| eval: false
+#| eval: true
 # Generate predictions on the evaluation dataset using the selected negative binomial model
 eval_predictions <- predict(model3, newdata = wine_eval_prep, type = "response")
 
