@@ -141,7 +141,7 @@ data_list <- lapply(filepaths, function(fp) {
 
     # Pivot first column wider
     mutate(
-      !!first_col := paste0(first_col, "_", as.character(.data[[first_col]])),
+      "{first_col}" := paste0(first_col, "_", as.character(.data[[first_col]]))
     ) |>
     pivot_wider(names_from = 1, values_from = percent) |> 
 
