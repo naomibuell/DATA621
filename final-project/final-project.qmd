@@ -35,10 +35,33 @@ library(corrplot)
 library(GGally)
 library(janitor)
 library(pROC)
-library(fastDummies)
 library(tidytable)
 library(stringr)
+library(conflicted)
+library(caret)
+library(forecast)
+
+# Specify package preferences to avoid function name conflicts
+conflicts_prefer(dplyr::select)
+conflicts_prefer(dplyr::mutate)
+conflicts_prefer(dplyr::group_by)
+conflicts_prefer(dplyr::ungroup)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::n_distinct)
+conflicts_prefer(dplyr::full_join)
+conflicts_prefer(dplyr::bind_rows)
+conflicts_prefer(dplyr::bind_cols)
+conflicts_prefer(dplyr::rename)
+conflicts_prefer(dplyr::pull)
+conflicts_prefer(dplyr::arrange)
+conflicts_prefer(dplyr::transmute)
+conflicts_prefer(tidyr::pivot_wider)
+conflicts_prefer(tidyr::pivot_longer)
 ```
+
+::: callout-note
+From Alex: Some sections have our names next to the section title and others don't. I'm fine with either, but could we make them consistent?
+:::
 
 # Abstract
 
@@ -86,7 +109,13 @@ We use data on the state-level prevalence of pain reliever misuse and demographi
 
 We performed exploratory data analysis to understand the distribution of our outcome variable (prevalence of pain reliever misuse) and the relationships between our predictors and the outcome. We visualized the correlations between predictors and the outcome variable, as well as the distribution of the numeric variables.
 
-## Data Preparation methods (Alex)
+## Data Preparation (Alex)
+
+Box-Cox transformations were used to normalize data distributions of numeric predictors. We confirmed that these variables had positive values, which is required for this method. We explicitly calculated the optimal lambda values, which provided insight into the optimal transformations needed to normalize each variable, and then used these values to calculate the transformed data.
+
+The data did not contain any missing values, so imputation was not needed. For consistency with a similar study [@Montiel_Ishino2020] (see Literature review section), which will be used for comparison in the Discussion section, no additional features were created.
+
+Finally, we split the data 70:30 into training and test sets.
 
 ## Assumptions (Nana)
 
@@ -167,7 +196,7 @@ years <- sapply(filepaths, extract_year_tag) |> unique()
 # Iterate across years, join data frames in data_list by state and year within each year.
 yearly_joined_data <- lapply(years, function(yr) {
   year_dfs <- data_list |>
-    purrr::keep(~ dplyr::n_distinct(.x$year) == 1 && .x$year[[1]] == yr)
+    purrr::keep(~ n_distinct(.x$year) == 1 && .x$year[[1]] == yr)
 
   if (length(year_dfs) == 0) return(NULL)
   if (length(year_dfs) == 1) return(year_dfs[[1]])
@@ -252,10 +281,22 @@ The data set contains `r nrows` state-year rows and `r ncols` features, and is `
 #| tbl-cap: "Summary statistics for all variables in the dataset"
 #| echo: true
 
-tbl_summ_stats <- df_renamed |> skim_without_charts() |> janitor::clean_names() |> as_tibble() |>
-    rename(Variable = skim_variable, "Completeness rate" = complete_rate, "Mean" = numeric_mean, "SD" = numeric_sd, "P50" = numeric_p50, "Min" = numeric_p0, "P25" = numeric_p25, "P75" = numeric_p75, "Max" = numeric_p100) |>
+tbl_summ_stats <- df_renamed |> 
+  skim_without_charts() |> 
+  janitor::clean_names() |> 
+  as_tibble() |>
+  rename(Variable = skim_variable, 
+         "Completeness rate" = complete_rate, 
+         "Mean" = numeric_mean, 
+         "SD" = numeric_sd, 
+         "P50" = numeric_p50, 
+         "Min" = numeric_p0, 
+         "P25" = numeric_p25, 
+         "P75" = numeric_p75, 
+         "Max" = numeric_p100) |>
     select(Variable, "Completeness rate", Mean, Min, P25, P50, P75, Max) |>
-    mutate(across(where(is.numeric), ~ signif(., 2))) |> knitr::kable()
+    mutate(across(where(is.numeric), ~ signif(., 2))) |> 
+  knitr::kable()
 
 tbl_summ_stats
 ```
@@ -275,7 +316,15 @@ df_renamed_cor <- df_renamed |>
 # Suppress small correlations by setting them to NA so corrplot leaves them blank
 df_renamed_cor[abs(df_renamed_cor) < 0.05] <- NA
 
-corrplot(df_renamed_cor, method = "circle", type = "upper", tl.cex = 0.4, insig = "blank", na.label = " ", addCoef.col = "black", number.cex = 0.3, tl.srt = 45)
+corrplot(df_renamed_cor, 
+         method = "circle", 
+         type = "upper", 
+         tl.cex = 0.4, 
+         insig = "blank", 
+         na.label = " ", 
+         addCoef.col = "black", 
+         number.cex = 0.3,
+         tl.srt = 45)
 
 most_corr_w_target <- df_renamed_cor |>
     as.data.frame() |>
@@ -317,12 +366,80 @@ df_renamed |>
     theme_minimal() +
     theme(panel.grid = element_blank()) +
     labs(x = NULL, y = "Count")
-
 ```
 
 Most variables are approximately normally distributed, except for many of the race indicator variables. The proportion of individuals who are non-white--especially those who are an "other" race besides hispanic, non-hispanic white, or non-hispanic black--are skewed right, mostly close to 0 across states and years, with a few higher outliers. This is expected given the racial demographics of the US. The proportion of individuals who are aged 26-34 also has a few high outliers.
 
 ## Results of Data Preparation (Alex)
+
+### Transformations
+
+The optimal lambda values for Box-Cox transformation provided insight into which variables would benefit from various types of transformation:
+
+-   `age_50_plus`, `some_college`, `poverty_2x_plus`, and `race_nh_white` had $\lambda \approx 2$, which indicates squared transformation,
+
+-   `emp_unemployed` and `medicaid_coverage` had $\lambda \approx 0.5$, which indicates square root transformation,
+
+-   `race_nh_black`, `race_hisp`, and `poverty`) had $\lambda \approx 0$, which indicates natural log transformation,
+
+-   `less_than_high_school`, `college_grad`, and `race_other` had $\lambda \approx -0.5$, which indicates reciprocal square root transformation,
+
+-   `age_18_25` had $\lambda \approx -1$, which indicates inverse transformation, and
+
+-   `age_26_34` and `age_35_49` had $\lambda = -2$, which indicates inverse squared transformation
+
+Several variables (e.g., `age_12_17`, `poverty_2x`, `high_school`, `emp_full_time`) had $\lambda \approx 1$, which indicates that their distributions are approximately normal, so no (or very little) transformation is needed.
+
+```{r}
+#| label: calc-box-cox-lambda
+
+# Numeric predictors
+predictors_untransformed <- select(df_renamed, age_12_17:poverty_2x_plus)
+
+# Determine optimal lambda values for Box-Cox transformation
+lambdas <- purrr::map_dbl(predictors_untransformed, ~ {
+  caret::BoxCoxTrans(.x)$lambda
+})
+
+# Convert results vector to dataframe and format
+optimal_lambdas <- as.data.frame(lambdas)
+optimal_lambdas$variable <- rownames(optimal_lambdas)
+rownames(optimal_lambdas) <- NULL
+optimal_lambdas |>
+  arrange(desc(lambdas)) |>
+  select(variable, 'lambda' = 'lambdas') |>
+  knitr::kable()
+```
+
+These lambda values were then used to apply Box-Cox transformation to the numeric predictor variables.
+
+```{r}
+#| label: apply-box-cox-transformation
+
+# Box-Cox transformation of numeric variables using optimal lambda values (previous block)
+lambdas_vec <- optimal_lambdas$lambdas
+predictors_transformed <- purrr::map2_dfc(
+  .x = predictors_untransformed,
+  .y = lambdas_vec,
+  .f = ~forecast::BoxCox(.x, .y)
+)
+
+# Restore the categorical and target variables and create new dataframe
+df_prepared <- bind_cols(df_renamed[, 1:3], predictors_transformed)
+```
+
+### Data split
+
+Finally, we split the data 70:30 in preparation for model development.
+
+```{r}
+#| label: split-data
+
+set.seed(144)
+train_indices <- createDataPartition(df_prepared$pain_relievers_misuse, p = 0.7, list = FALSE)
+oud_train_split <- df_prepared[train_indices, ]
+oud_test_split <- df_prepared[-train_indices, ]
+```
 
 ## Results of Assumption checks (Nana)
 
