@@ -40,6 +40,8 @@ library(stringr)
 library(conflicted)
 library(caret)
 library(forecast)
+library(glmnet)
+library(MASS)
 
 # Specify package preferences to avoid function name conflicts
 conflicts_prefer(dplyr::select)
@@ -120,6 +122,21 @@ Finally, we split the data 70:30 into training and test sets.
 ## Assumptions (Nana)
 
 ## Build models methods (Richie)
+
+For our models, we will attempt to predict the state-level prevalence of pain reliever misuse by evaluating a series of regression techniques designed to balance model fit with predictive accuracy. Our methodology follows a multi-stage approach, transitioning from a comprehensive baseline to restricted models that handle the complexities of high-dimensional demographic data.  
+
+### Baseline Full Multiple Linear Regression
+Our initial approach involves constructing a Full Multiple Linear Regression model using all 20+ available predictors. This process partitions the response variable into a systematic component represented by the predictors and a random error component. We use the method of Least Squares to calculate the unique set of coefficients that minimizes the sum of squared residuals, ensuring we obtain the best linear unbiased estimates (BLUE) given our data. To execute this, we will fit a model using every numeric demographic and socioeconomic variable in the training set to establish a performance ceiling for our $R^2$ and residual standard error.
+
+### Stepwise Variable Selection
+
+To address potential redundancy in our 20+ predictors, we implement Stepwise Selection based on the Akaike Information Criterion (AIC). This "auto-selection" method iteratively adds or removes variables, comparing a larger model ($\Omega$) to a smaller subset ($\omega$). The goal is to minimize the AIC, which effectively penalizes the model for every additional parameter included, thereby favoring simpler, more interpretable explanations.
+
+### LASSO Regression
+Because demographic variables (e.g., age, race, and poverty levels) are often highly correlated, we will utilize LASSO (Least Absolute Shrinkage and Selection Operator). This technique introduces a penalty term to the OLS equation that can shrink insignificant coefficients exactly to zero. This process requires Hyperparameter Tuning to find the optimal value of $\lambda$ (the penalty strength) that produces the minimum error. 
+
+### Predictive Validation and Testing
+To ensure our models generalize to unseen data, we utilize a two-stage validation process. First, we will implement 10-fold Cross-Validation on the training data. This involves splitting the training set into ten equal parts, or "folds"; the model is trained on nine folds and validated on the tenth, with the process repeating ten times so every data point is used for validation once. We use the average Root Mean Squared Error (RMSE) across these folds to select our winning model. Finally, we will test the winning model on the held-out test set to get an honest estimate of its predictive ability on new data.
 
 ## Select models methods (Said)
 
@@ -426,6 +443,9 @@ predictors_transformed <- purrr::map2_dfc(
 
 # Restore the categorical and target variables and create new dataframe
 df_prepared <- bind_cols(df_renamed[, 1:3], predictors_transformed)
+
+# Removing the year and state variables since they are not needed for modeling and may cause data leakage if included as predictors
+df_prepared <- df_prepared |> select(-state, -year)
 ```
 
 ### Data split
@@ -444,6 +464,87 @@ oud_test_split <- df_prepared[-train_indices, ]
 ## Results of Assumption checks (Nana)
 
 ## Results of Building models (Richie)
+
+Before building the models, we define the 10-fold Cross-Validation logic that we will use for model selection and evaluation. 
+
+```{r}
+# Define 10-fold Cross-Validation logic
+# Ref: AMAR Ch 7.3 (Predictive Ability)
+train_control <- trainControl(method = "cv", number = 10)
+
+# List to contain modeling objects and cross-validation results
+model_results_list <- list()
+```
+
+Our First model is the Full Multiple Linear Regression model, which includes all predictors. This model serves as a baseline for comparison with more parsimonious models.
+
+```{r}
+#| label: model-1-full-mlr
+
+# 1. Full Multiple Linear Regression
+model_full <- train(
+  pain_relievers_misuse ~ ., 
+  data = oud_train_split, 
+  method = "lm", 
+  trControl = train_control
+)
+
+model_full
+model_results_list$Full_MLR <- model_full
+```
+
+Secondly, we will train our Stepwise Selection model, which iteratively adds or removes predictors based on AIC to find a more parsimonious model.
+
+```{r}
+#| label: model-2-stepwise-aic
+
+# 2. Stepwise Selection based on AIC
+model_step <- train(
+  pain_relievers_misuse ~ ., 
+  data = oud_train_split, 
+  method = "lmStepAIC", 
+  trControl = train_control,
+  trace = FALSE
+)
+
+model_step
+model_results_list$Stepwise_AIC <- model_step
+```
+
+Next, we train our LASSO regression model, which applies a penalty to shrink less important coefficients to zero, effectively performing variable selection. We impliment a grid search to find the optimal value of the regularization parameter $\lambda$ that minimizes the cross-validated error.
+
+```{r}
+#| label: model-3-lasso-tuning
+
+# 3. LASSO Regression with Hyperparameter Tuning
+lasso_grid <- expand.grid(fraction = seq(0.1, 1, length = 10))
+
+model_lasso <- train(
+  pain_relievers_misuse ~ ., 
+  data = oud_train_split, 
+  method = "lasso", 
+  trControl = train_control,
+  tuneGrid = lasso_grid
+)
+
+model_lasso
+model_results_list$LASSO <- model_lasso
+```
+
+Lastly, we will compare the performance of these three models based on their cross-validated RMSE and select the best performing model for final evaluation on the test set.
+
+```{r}
+#| label: model-validation-comparison
+
+# Collecting CV results for comparison
+cv_summary <- resamples(list(
+  Full = model_results_list$Full_MLR,
+  Stepwise = model_results_list$Stepwise_AIC,
+  LASSO = model_results_list$LASSO
+))
+
+summary(cv_summary)
+```
 
 ## Results of model selection (Said)
 
