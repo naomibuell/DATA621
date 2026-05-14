@@ -143,6 +143,11 @@ Because demographic variables (e.g., age, race, and poverty levels) are often hi
 To ensure our models generalize to unseen data, we utilize a two-stage validation process. First, we will implement 10-fold Cross-Validation on the training data. This involves splitting the training set into ten equal parts, or "folds"; the model is trained on nine folds and validated on the tenth, with the process repeating ten times so every data point is used for validation once. We use the average Root Mean Squared Error (RMSE) across these folds to select our winning model. Finally, we will test the winning model on the held-out test set to get an honest estimate of its predictive ability on new data.
 
 ## Model Selection (Said)
+To determine the most effective predictive model for estimating state-level prevalence of pain reliever misuse, we compared three regression approaches: a Full Multiple Linear Regression model, a Stepwise AIC regression model, and a LASSO regression model. The purpose of comparing these models was to identify the model that provides the best balance between predictive accuracy, interpretability, and model simplicity.
+
+The Full Multiple Linear Regression model was used as the baseline model because it included all transformed demographic and socioeconomic predictors. The Stepwise AIC model was used to reduce unnecessary predictors and create a more parsimonious model. The LASSO regression model was used because it can handle multicollinearity by shrinking less useful coefficients toward zero and performing variable selection.
+
+All three models were evaluated using 10-fold Cross-Validation on the training dataset. Root Mean Squared Error (RMSE) was used as the main comparison metric because it measures prediction error, with lower values indicating better predictive performance. The final model was selected based on cross-validated RMSE, model stability, and interpretability.
 
 # Results
 
@@ -551,6 +556,25 @@ summary(cv_summary)
 ```
 
 ## Results of model selection (Said)
+
+```{r}
+# Collecting CV results for comparison
+cv_summary <- resamples(list(
+  Full = model_results_list$Full_MLR,
+  Stepwise = model_results_list$Stepwise_AIC,
+  LASSO = model_results_list$LASSO
+))
+
+summary(cv_summary)
+```
+The three candidate models were compared using 10-fold Cross-Validation. The Full Multiple Linear Regression model provided a useful baseline because it included all available predictors, but it was also the most complex model and had a higher risk of overfitting.
+The Stepwise AIC model improved model simplicity by removing predictors that contributed limited explanatory value. This made the model easier to interpret while still maintaining competitive predictive performance.
+The LASSO regression model provided the best overall balance between prediction accuracy and model simplicity. Because many demographic and socioeconomic predictors may be correlated, LASSO was useful because it reduced the effect of multicollinearity and selected the most important predictors through coefficient shrinkage.
+
+Based on the cross-validated RMSE comparison, the LASSO regression model was selected as the final model for predicting state-level prevalence of pain reliever misuse. This model was preferred because it offered strong predictive performance, better generalizability, and a more stable structure for modeling public health data.
+
+
+
 
 # Discussion
 
