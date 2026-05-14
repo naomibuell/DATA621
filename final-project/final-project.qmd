@@ -42,6 +42,7 @@ library(caret)
 library(forecast)
 library(glmnet)
 library(MASS)
+library(elasticnet)
 
 # Specify package preferences to avoid function name conflicts
 conflicts_prefer(dplyr::select)
@@ -59,10 +60,13 @@ conflicts_prefer(dplyr::arrange)
 conflicts_prefer(dplyr::transmute)
 conflicts_prefer(tidyr::pivot_wider)
 conflicts_prefer(tidyr::pivot_longer)
+conflicts_prefer(base::`%in%`)
 ```
 
 ::: callout-note
 From Alex: Some sections have our names next to the section title and others don't. I'm fine with either, but could we make them consistent?
+
+Naomi: We should remove our names after we're done.
 :::
 
 # Abstract
@@ -75,7 +79,7 @@ Background: Opioid addiction is a public health crisis that has affected countle
 
 Research Question: What factors are important for predicting prevalence rate of opioid use disorder (OUD)?
 
-Methods: We downloaded data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2016–2019 and 2022)...\[TBD\]
+Methods: We downloaded data on the prevalence of pain reliever misuse in each state from the National Survey on Drug Use and Health from the Substance and Mental Health Services Administration for all available years (2018–2019 and 2021-2024). We performed exploratory data analysis to understand the distribution of our outcome variable (prevalence of pain reliever misuse) and the relationships between our predictors and the outcome. We used Box-Cox transformations to normalize data distributions of numeric predictors, and then split the data 70:30 into training and test sets. We built three regression models to predict the prevalence of pain reliever misuse: a full multiple linear regression model with all predictors, a stepwise selection model based on AIC, and a LASSO regression model with hyperparameter tuning...
 
 Results: \[TBD\]
 
@@ -91,27 +95,27 @@ Opioid addiction is a public health crisis that has affected countless lives. Th
 
 # Literature review
 
-OUD is a complex problem with many risk factors, including sociodemographic, geographic, and community/societal factors. [@Jalali2020] Sociodemographic risk factors include age, sex, and occupation. Opioid misuse is most common in young adults (18-25 years old), and first misuse of opioids at an early age is a significant risk factor for OUD. [@Crane2013][@Schepis2017] In addition, male sex is a risk factor for OUD because men are more likely than women to experience euphoria from opioids. [@Corner2010] Some occupations, particularly those that involve heavy physical labor (e.g., construction, mining), are also risk factors for OUD, because they may be associated with more work-related injuries that lead to chronic pain and treatment with opioid analgesics. [@Shaw2020][@Friedman2025] In addition to these sociodemographic factors, mental health conditions, such as anxiety and depression, and a history of misusing other subtances (eg, illicit drugs) can increase the risk of OUD. [@Valente2020][@Cicero2020]
+OUD is a complex problem with many risk factors, including sociodemographic, geographic, and community/societal factors [@Jalali2020]. Sociodemographic risk factors include age, sex, and occupation. Opioid misuse is most common in young adults (18-25 years old), and first misuse of opioids at an early age is a significant risk factor for OUD [@Crane2013; @Schepis2017]. In addition, male sex is a risk factor for OUD because men are more likely than women to experience euphoria from opioids [@Comer2010]. Some occupations, particularly those that involve heavy physical labor (e.g., construction, mining), are also risk factors for OUD, because they may be associated with more work-related injuries that lead to chronic pain and treatment with opioid analgesics [@Shaw2020; @Friedman2025]. In addition to these sociodemographic factors, mental health conditions, such as anxiety and depression, and a history of misusing other subtances (eg, illicit drugs) can increase the risk of OUD [@Valente2020; @Cicero2020].
 
-The risk of OUD also varies by geographic location. For example, opioid medications are prescribed more frequently in non-metropolitan areas, which may be due to the higher proportion of older individuals in these areas who need pain relief after surgeries or individuals who are injured while performing manual labor. [@Keyes2014][@Rigg2015] Rural areas may also have fewer community resources for prevention and treatment programs than urban areas, which can increase the likelihood of developing and prolonging OUD. [@EDC2016]
+The risk of OUD also varies by geographic location. For example, opioid medications are prescribed more frequently in non-metropolitan areas, which may be due to the higher proportion of older individuals in these areas who need pain relief after surgeries or individuals who are injured while performing manual labor [@Keyes2014][@Rigg2015]. Rural areas may also have fewer community resources for prevention and treatment programs than urban areas, which can increase the likelihood of developing and prolonging OUD [@EDC2016].
 
-Furthermore, disparities in healthcare access and insurance coverage can make it more difficult for some individuals to receive care for OUD, particularly those who are racial or ethnic minorities, live in rural areas, or cannot afford health insurance. [@Latimore2021][@PEW2019] The US Affordable Care Act (ACA; also known as “Obamacare”) provided states the option to extend Medicaid benefits to non-elderly adults with lower incomes, including access to OUD treatment; however, not all states have implemented the expansion. [@Mitchell2021] These differences in the implementation of ACA have resulted in a lower rate of prescriptions for medications to treat OUD in states that have not yet expanded Medicaid compared with those that have. [@Sharp2018][@Lewis2020]
+Furthermore, disparities in healthcare access and insurance coverage can make it more difficult for some individuals to receive care for OUD, particularly those who are racial or ethnic minorities, live in rural areas, or cannot afford health insurance [@Latimore2021, @PEW2019]. The US Affordable Care Act (ACA; also known as “Obamacare”) provided states the option to extend Medicaid benefits to non-elderly adults with lower incomes, including access to OUD treatment; however, not all states have implemented the expansion [@Mitchell2021]. These differences in the implementation of ACA have resulted in a lower rate of prescriptions for medications to treat OUD in states that have not yet expanded Medicaid compared with those that have [@Sharp2018; @Lewis2020].
 
-Although many studies have documented risk factors for OUD in various groups (e.g., military veterans) or geographic regions (e.g, urban verus rural), few have analyzed nationwide data. One study, which modeled National Survey on Drug Use and Health (NSDUH) data from 2017-2018 using multivariate logistic regression, found that the most significant predictors of OUD were abuse of other substances, particularly tranquilizers (odds ratio \[OR\]=16.7), criminal history (OR=2.6), and lack of private health insurance (OR=2.1) (all P\<0.001). [@Montiel_Ishino2020] Here, we perform a similar analysis using a broader range of NSDUH data (2016-2019 + 2022), including data before and after the Covid pandemic.
+Although many studies have documented risk factors for OUD in various groups (e.g., military veterans) or geographic regions (e.g, urban verus rural), few have analyzed nationwide data. One study, which modeled National Survey on Drug Use and Health (NSDUH) data from 2017-2018 using multivariate logistic regression, found that the most significant predictors of OUD were abuse of other substances, particularly tranquilizers (odds ratio \[OR\]=16.7), criminal history (OR=2.6), and lack of private health insurance (OR=2.1) (all P\<0.001) [@Montiel_Ishino2020]. Here, we perform a similar analysis using a broader range of NSDUH data (2016-2019 + 2022), including data before and after the Covid pandemic.
 
-# Methodology
+# Methods
 
 ::: callout-note
 Discuss the key aspects of your problem, data set and regression model(s). Given that you are working on real-world data, explain at a high-level your exploratory data analysis, how you prepared the data for regression modeling, your process for building regression models, and your model selection.
 :::
 
-We use data on the state-level prevalence of pain reliever misuse and demographic characteristics from the National Survey on Drug Use and Health (NSDUH) from the Substance and Mental Health Services Administration for 2018-2024 [@NSDUH2018-2019].
+We use data on the state-level prevalence of pain reliever misuse and demographic characteristics from the National Survey on Drug Use and Health (NSDUH) from the Substance and Mental Health Services Administration for 2018-2019 and 2021-2024 [@NSDUH2018-2019].
 
 ## Exploratory Data Analysis
 
 We performed exploratory data analysis to understand the distribution of our outcome variable (prevalence of pain reliever misuse) and the relationships between our predictors and the outcome. We visualized the correlations between predictors and the outcome variable, as well as the distribution of the numeric variables.
 
-## Data Preparation (Alex)
+## Data Preparation
 
 Box-Cox transformations were used to normalize data distributions of numeric predictors. We confirmed that these variables had positive values, which is required for this method. We explicitly calculated the optimal lambda values, which provided insight into the optimal transformations needed to normalize each variable, and then used these values to calculate the transformed data.
 
@@ -121,7 +125,7 @@ Finally, we split the data 70:30 into training and test sets.
 
 ## Assumptions (Nana)
 
-## Build models methods (Richie)
+## Model Building
 
 For our models, we will attempt to predict the state-level prevalence of pain reliever misuse by evaluating a series of regression techniques designed to balance model fit with predictive accuracy. Our methodology follows a multi-stage approach, transitioning from a comprehensive baseline to restricted models that handle the complexities of high-dimensional demographic data.  
 
@@ -138,9 +142,9 @@ Because demographic variables (e.g., age, race, and poverty levels) are often hi
 ### Predictive Validation and Testing
 To ensure our models generalize to unseen data, we utilize a two-stage validation process. First, we will implement 10-fold Cross-Validation on the training data. This involves splitting the training set into ten equal parts, or "folds"; the model is trained on nine folds and validated on the tenth, with the process repeating ten times so every data point is used for validation once. We use the average Root Mean Squared Error (RMSE) across these folds to select our winning model. Finally, we will test the winning model on the held-out test set to get an honest estimate of its predictive ability on new data.
 
-## Select models methods (Said)
+## Model Selection (Said)
 
-# Experimentation and Results
+# Results
 
 ::: callout-note
 Describe the specifics of what you did (data exploration, data preparation, model building, model selection, model evaluation, etc.), and what you found out (statistical analyses, interpretation and discussion of the results, etc.).
@@ -387,7 +391,7 @@ df_renamed |>
 
 Most variables are approximately normally distributed, except for many of the race indicator variables. The proportion of individuals who are non-white--especially those who are an "other" race besides hispanic, non-hispanic white, or non-hispanic black--are skewed right, mostly close to 0 across states and years, with a few higher outliers. This is expected given the racial demographics of the US. The proportion of individuals who are aged 26-34 also has a few high outliers.
 
-## Results of Data Preparation (Alex)
+## Results of Data Preparation
 
 ### Transformations
 
@@ -463,7 +467,7 @@ oud_test_split <- df_prepared[-train_indices, ]
 
 ## Results of Assumption checks (Nana)
 
-## Results of Building models (Richie)
+## Modeling
 
 Before building the models, we define the 10-fold Cross-Validation logic that we will use for model selection and evaluation. 
 
@@ -548,7 +552,15 @@ summary(cv_summary)
 
 ## Results of model selection (Said)
 
-# Discussion and Conclusions (Naomi)
+# Discussion
+
+This study has several limitations. Namely, our data are at the state level, so we cannot make inferences about individual-level risk factors for OUD. In addition, our data are cross-sectional, so we cannot make causal inferences about the relationships between predictors and OUD. Finally, our data only include a limited number of predictors, so there may be other important factors that we did not include in our models.
+
+# Conclusions (Naomi)
+
+We found that... 
+
+Future research could...
 
 *Conclude your findings, limitations, and suggest areas for future work.*
 
