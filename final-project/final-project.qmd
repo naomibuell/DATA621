@@ -277,7 +277,7 @@ df_renamed <- df |>
   )
 ```
 
-## Exploratory Data Analysis (Naomi)
+## Exploratory Data Analysis
 
 ```{r}
 #| label: data-exploration
