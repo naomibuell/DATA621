@@ -43,7 +43,6 @@ library(forecast)
 library(glmnet)
 library(MASS)
 library(elasticnet)
-library(forecast)
 library(car)
 
 # Specify package preferences to avoid function name conflicts
@@ -65,12 +64,6 @@ conflicts_prefer(tidyr::pivot_longer)
 conflicts_prefer(base::`%in%`)
 conflicts_prefer(dplyr::left_join)
 ```
-
-::: callout-note
-From Alex: Some sections have our names next to the section title and others don't. I'm fine with either, but could we make them consistent?
-
-Naomi: We should remove our names after we're done.
-:::
 
 # Abstract
 
@@ -717,6 +710,24 @@ most_imp_predictors <- imp_coeffs_table |>
 ```
 
 @tbl-lasso-coefficients-importance shows the coefficients and importance of each predictor in our final LASSO regression model. The final LASSO model identified the following predictors as most important for predicting pain reliever misuse: `r paste(most_imp_predictors, collapse = ", ")`. These predictors had non-zero coefficients in the LASSO model, indicating that they were selected as significant contributors to the prediction of pain reliever misuse.
+
+```{r}
+#| label: test-set-evaluation
+#| echo: true
+
+# Predict on the held-out test set using the final LASSO model
+test_preds <- predict(model_lasso, newdata = oud_test_split)
+
+# Calculate final performance metrics
+test_rmse <- caret::RMSE(test_preds, oud_test_split$pain_relievers_misuse)
+test_r2   <- caret::R2(test_preds, oud_test_split$pain_relievers_misuse)
+
+# Display metrics
+data.frame(Test_RMSE = test_rmse, Test_R2 = test_r2) |> 
+  knitr::kable(caption = "Final LASSO Model Performance on the Held-Out Test Set")
+```
+
+To assess its generalizability, the final LASSO model was evaluated on the held-out test set, yielding an RMSE of `r round(test_rmse, 3)` and an $R^2$ of `r round(test_r2, 3)`. These metrics confirm that the model retains strong predictive power and stable performance when applied to unseen data, showing no signs of significant overfitting compared to the training phase.
 
 # Discussion
 
