@@ -121,9 +121,10 @@ Finally, we split the data 70:30 into training and test sets.
 
 ## Model Building
 
-For our models, we will attempt to predict the state-level prevalence of pain reliever misuse by evaluating a series of regression techniques designed to balance model fit with predictive accuracy. Our methodology follows a multi-stage approach, transitioning from a comprehensive baseline to restricted models that handle the complexities of high-dimensional demographic data.  
+For our models, we will attempt to predict the state-level prevalence of pain reliever misuse by evaluating a series of regression techniques designed to balance model fit with predictive accuracy. Our methodology follows a multi-stage approach, transitioning from a comprehensive baseline to restricted models that handle the complexities of high-dimensional demographic data.
 
 ### Baseline Full Multiple Linear Regression
+
 Our initial approach involves constructing a Full Multiple Linear Regression model using all 20+ available predictors. This process partitions the response variable into a systematic component represented by the predictors and a random error component. We use the method of Least Squares to calculate the unique set of coefficients that minimizes the sum of squared residuals, ensuring we obtain the best linear unbiased estimates (BLUE) given our data. To execute this, we will fit a model using every numeric demographic and socioeconomic variable in the training set to establish a performance ceiling for our $R^2$ and residual standard error.
 
 ### Stepwise Variable Selection
@@ -131,12 +132,14 @@ Our initial approach involves constructing a Full Multiple Linear Regression mod
 To address potential redundancy in our 20+ predictors, we implement Stepwise Selection based on the Akaike Information Criterion (AIC). This "auto-selection" method iteratively adds or removes variables, comparing a larger model ($\Omega$) to a smaller subset ($\omega$). The goal is to minimize the AIC, which effectively penalizes the model for every additional parameter included, thereby favoring simpler, more interpretable explanations.
 
 ### LASSO Regression
-Because demographic variables (e.g., age, race, and poverty levels) are often highly correlated, we will utilize LASSO (Least Absolute Shrinkage and Selection Operator). This technique introduces a penalty term to the OLS equation that can shrink insignificant coefficients exactly to zero. This process requires Hyperparameter Tuning to find the optimal value of $\lambda$ (the penalty strength) that produces the minimum error. 
+
+Because demographic variables (e.g., age, race, and poverty levels) are often highly correlated, we will utilize LASSO (Least Absolute Shrinkage and Selection Operator). This technique introduces a penalty term to the OLS equation that can shrink insignificant coefficients exactly to zero. This process requires Hyperparameter Tuning to find the optimal value of $\lambda$ (the penalty strength) that produces the minimum error.
 
 ### Predictive Validation and Testing
+
 To ensure our models generalize to unseen data, we utilize a two-stage validation process. First, we will implement 10-fold Cross-Validation on the training data. This involves splitting the training set into ten equal parts, or "folds"; the model is trained on nine folds and validated on the tenth, with the process repeating ten times so every data point is used for validation once. We use the average Root Mean Squared Error (RMSE) across these folds to select our winning model. Finally, we will test the winning model on the held-out test set to get an honest estimate of its predictive ability on new data.
 
-## Model Selection 
+## Model Selection
 
 To determine the most effective predictive model for estimating state-level prevalence of pain reliever misuse, we compared three regression approaches: a Full Multiple Linear Regression model, a Stepwise AIC regression model, and a LASSO regression model. The purpose of comparing these models was to identify the model that provides the best balance between predictive accuracy, interpretability, and model simplicity.
 
@@ -418,7 +421,7 @@ optimal_lambdas |>
 
 -   `age_50_plus`, `some_college`, `poverty_2x_plus`, and `race_nh_white` had $\lambda \approx 2$, which indicates squared transformation,
 
-- Several variables (e.g., `age_12_17`, `poverty_2x`, `high_school`, `emp_full_time`) had $\lambda \approx 1$, which indicates that their distributions are approximately normal, so no (or very little) transformation is needed. 
+-   Several variables (e.g., `age_12_17`, `poverty_2x`, `high_school`, `emp_full_time`) had $\lambda \approx 1$, which indicates that their distributions are approximately normal, so no (or very little) transformation is needed.
 
 -   `emp_unemployed` and `medicaid_coverage` had $\lambda \approx 0.5$, which indicates square root transformation,
 
@@ -465,7 +468,7 @@ oud_test_split <- df_prepared[-train_indices, ]
 
 ## Modeling
 
-Before building the models, we define the 10-fold Cross-Validation logic that we will use for model selection and evaluation. 
+Before building the models, we define the 10-fold Cross-Validation logic that we will use for model selection and evaluation.
 
 ```{r}
 # Define 10-fold Cross-Validation logic
@@ -561,8 +564,7 @@ summary(cv_summary)
 
 The three candidate models were compared using 10-fold Cross-Validation. The Full Multiple Linear Regression model provided a useful baseline because it included all available predictors, but it was also the most complex model and had a higher risk of overfitting.
 
-The Stepwise AIC model improved model simplicity by removing predictors that contributed limited explanatory value. This made the model easier to interpret while still maintaining competitive predictive performance.
-The LASSO regression model provided the best overall balance between prediction accuracy and model simplicity. Because many demographic and socioeconomic predictors may be correlated, LASSO was useful because it reduced the effect of multicollinearity and selected the most important predictors through coefficient shrinkage.
+The Stepwise AIC model improved model simplicity by removing predictors that contributed limited explanatory value. This made the model easier to interpret while still maintaining competitive predictive performance. The LASSO regression model provided the best overall balance between prediction accuracy and model simplicity. Because many demographic and socioeconomic predictors may be correlated, LASSO was useful because it reduced the effect of multicollinearity and selected the most important predictors through coefficient shrinkage.
 
 Based on the cross-validated RMSE comparison, the LASSO regression model was selected as the final model for predicting state-level prevalence of pain reliever misuse. This model was preferred because it offered strong predictive performance, better generalizability, and a more stable structure for modeling public health data.
 
@@ -622,7 +624,7 @@ most_imp_predictors <- imp_coeffs_table |>
   pull(Predictor)
 ```
 
-@tbl-lasso-coefficients-importance shows the coefficients and importance of each predictor in our final LASSO regression model. The final LASSO model identified the following predictors as most important for predicting pain reliever misuse: `r paste(most_imp_predictors, collapse = ", ")`. These predictors had non-zero coefficients in the LASSO model, indicating that they were selected as significant contributors to the prediction of pain reliever misuse. 
+@tbl-lasso-coefficients-importance shows the coefficients and importance of each predictor in our final LASSO regression model. The final LASSO model identified the following predictors as most important for predicting pain reliever misuse: `r paste(most_imp_predictors, collapse = ", ")`. These predictors had non-zero coefficients in the LASSO model, indicating that they were selected as significant contributors to the prediction of pain reliever misuse.
 
 # Discussion
 
@@ -639,9 +641,9 @@ predictor_coeffs <- imp_coeffs_table |>
   tibble::deframe()
 ```
 
-Our results suggested that educational attainment was one of the strongest predictors of pain reliever misuse. The rate of folks having completed some college education was positively associated with the outcome ($\beta$ = `r round(predictor_coeffs["some_college"], 3)`), while the proportions with less than a high school education ($\beta$ = `r round(predictor_coeffs["less_than_high_school"], 3)`) and with a college degree ($\beta$ = `r round(predictor_coeffs["college_grad"], 3)`) were both negatively associated with the outcome. In other words, states with fewer educational resources or lower educational attainment tended to have higher rates of pain reliever misuse. 
+Our results suggested that educational attainment was one of the strongest predictors of pain reliever misuse. The rate of folks having completed some college education was positively associated with the outcome ($\beta$ = `r round(predictor_coeffs["some_college"], 3)`), while the proportions with less than a high school education ($\beta$ = `r round(predictor_coeffs["less_than_high_school"], 3)`) and with a college degree ($\beta$ = `r round(predictor_coeffs["college_grad"], 3)`) were both negatively associated with the outcome. In other words, states with fewer educational resources or lower educational attainment tended to have higher rates of pain reliever misuse.
 
-Income also mattered. The share of folks with incomes more than two times the federal poverty level (FPL) was negatively associated with the outcome ($\beta$ = `r round(predictor_coeffs["poverty_2x_plus"], 3)`), while the share living at or below that threshold was positively associated with the outcome ($\beta$ = `r round(predictor_coeffs["poverty_2x"], 3)`). For 2026, 200% of the FPL in most states is approximately $31,920 for a single person, $43,280 for a 2-person household, $54,640 for 3, and $66,000 for a family of 4, annually [@HealthcareGov_FPL]. This pattern suggests that states with more residents living closer to the poverty threshold tended to have higher rates of pain reliever misuse, while states with more residents above that level tended to have lower rates.
+Income also mattered. The share of folks with incomes more than two times the federal poverty level (FPL) was negatively associated with the outcome ($\beta$ = `r round(predictor_coeffs["poverty_2x_plus"], 3)`), while the share living at or below that threshold was positively associated with the outcome ($\beta$ = `r round(predictor_coeffs["poverty_2x"], 3)`). For 2026, 200% of the FPL in most states is approximately \$31,920 for a single person, \$43,280 for a 2-person household, \$54,640 for 3, and \$66,000 for a family of 4, annually [@HealthcareGov_FPL]. This pattern suggests that states with more residents living closer to the poverty threshold tended to have higher rates of pain reliever misuse, while states with more residents above that level tended to have lower rates.
 
 Age composition was also important. The proportion of children aged 12 to 17 was positively associated with the outcome ($\beta$ = `r round(predictor_coeffs["age_12_17"], 3)`), but adult age groups were not strongly predictive in the final model. This suggests that, states with a higher share of the youth population tended to have higher rates of OUD, and child age was more informative than variation across adult age groups.
 
@@ -651,7 +653,9 @@ Race composition also appeared in the final model. The proportions of non-Hispan
 
 Overall, the final LASSO model suggests that educational attainment, poverty, age composition, employment, insurance coverage, and racial composition all help explain variation in state-level pain reliever misuse. However, these are associations rather than causal effects, and the coefficients should be read as model-based summaries of the transformed predictors.
 
-This study has several limitations. Namely, our data are at the state level, so we cannot make inferences about individual-level risk factors for OUD. In addition, our data are cross-sectional, so we cannot make causal inferences about the relationships between predictors and OUD. Finally, our data only include a limited number of predictors, so there may be other important factors that we did not include in our models.
+The associations identified in our LASSO model were in agreement with risk factors identified in a previous study using a logistic regression model; however, there were some differences in the relative importance of predictors. [@Montiel_Ishino2020] These differences may reflect the longer study period in our analysis as well as differences in modeled predictors (i.e., Montiel-Ishino et al. included abuse of non-opioid substances).
+
+Our study has several limitations. Namely, the data are at the state level, so we cannot make inferences about individual-level risk factors for OUD. In addition, our data are cross-sectional, so we cannot make causal inferences about the relationships between predictors and OUD. Finally, our data only include a limited number of predictors, so there may be other important factors that we did not include in our models.
 
 # Conclusions
 
