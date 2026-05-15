@@ -44,6 +44,7 @@ library(glmnet)
 library(MASS)
 library(elasticnet)
 library(forecast)
+library(car)
 
 # Specify package preferences to avoid function name conflicts
 conflicts_prefer(dplyr::select)
@@ -117,11 +118,20 @@ The data did not contain any missing values, so imputation was not needed. For c
 
 Finally, we split the data 70:30 into training and test sets.
 
-## Assumptions (Nana)
+## Assumptions
+
+Both models rely on standard OLS assumptions. We assumed a linear relationship between predictors and the outcome, assessed via residual-versus-fitted plots. Observations are independent, as each represents a distinct US state. Homoscedasticity was evaluated through residual plots, with Box-Cox transformations applied to predictors to help stabilize variance. Normality of residuals was assessed using Q-Q plots. Multicollinearity was examined using variance inflation factors (VIFs); the stepwise AIC procedure's variable selection partially addresses this by dropping redundant predictors.
+
+LASSO uses the same basic assumptions of linear regression (linearity and independence), but it does not require residuals to be normally distributed. It works by adding a penalty that shrinks some coefficients to zero, which automatically removes less important variables and helps with multicollinearity. This is especially useful because the dataset has many correlated predictors compared to the number of observations (state-year data). The tuning parameter (λ) was chosen using 10-fold cross-validation, and all predictors were standardized so they were on the same scale before fitting the model.
+
 
 ## Model Building
 
 For our models, we will attempt to predict the state-level prevalence of pain reliever misuse by evaluating a series of regression techniques designed to balance model fit with predictive accuracy. Our methodology follows a multi-stage approach, transitioning from a comprehensive baseline to restricted models that handle the complexities of high-dimensional demographic data.
+
+### Model Diagnostics 
+
+Model diagnostics were conducted to evaluate overall model adequacy and detect potential violations of assumptions. For both OLS-based models, diagnostic checks included residual-versus-fitted plots to assess linearity and homoscedasticity, Q-Q plots to evaluate normality of residuals, and leverage/Cook’s distance diagnostics to identify influential observations. No single state exhibited undue influence on model estimates, and residual patterns did not indicate strong systematic violations. These diagnostics supported the validity of the model specifications while also highlighting the expected limitations of applying linear models to aggregated state-level data.
 
 ### Baseline Full Multiple Linear Regression
 
@@ -464,7 +474,16 @@ oud_train_split <- df_prepared[train_indices, ]
 oud_test_split <- df_prepared[-train_indices, ]
 ```
 
-## Results of Assumption checks (Nana)
+
+## Assumptions
+
+The Full Multiple Linear Regression and Stepwise AIC models rely on the standard assumptions of ordinary least squares (OLS) regression. These assumptions include linearity between predictors and the outcome, independence of observations, homoscedasticity (constant variance of residuals), approximate normality of residuals, and limited multicollinearity among predictors.
+
+Because the dataset consists of state-year observations, we assume that observations are independent across states and survey years. Several predictors represent demographic proportions that sum to one within groups (e.g., race, age, and education categories), so some degree of multicollinearity was expected.
+
+The LASSO model retains the assumptions of linearity and independence but addresses multicollinearity through L1 regularization, which shrinks less important coefficients toward zero. This makes LASSO particularly useful for datasets with many correlated predictors.
+
+Diagnostic plots, variance inflation factors (VIFs), and residual tests were used after model fitting to evaluate whether these assumptions were reasonably satisfied.
 
 ## Modeling
 
@@ -548,6 +567,79 @@ cv_summary <- resamples(list(
 
 summary(cv_summary)
 ```
+
+## Model Diagnostics
+
+```{r}
+#| label: fig-assumption-diagnostics
+#| fig-cap: "Diagnostic plots for the Full MLR and Stepwise AIC models"
+#| fig-width: 10
+#| fig-height: 8
+#| warning: false
+#| echo: true
+
+
+# Extract final fitted lm objects from caret
+lm_final   <- model_full$finalModel
+step_final <- model_step$finalModel
+
+# 2x4 grid: top row = Full MLR, bottom row = Stepwise AIC
+par(mfrow = c(2, 4))
+plot(lm_final,  main = "Full MLR")
+plot(step_final, main = "Stepwise AIC")
+par(mfrow = c(1, 1))
+```
+
+Linearity: Residual-versus-fitted plots for both models show no strong curvature and red lines approximately flat near zero, supporting the linearity assumption.
+
+Normality: Q-Q plots track closely along the diagonal through the middle range, indicating approximate normality. Minor tail deviations are present in both models, with X50 as a consistent outlier, though this is expected given the small sample size.
+
+Homoscedasticity: The Scale-Location plots show roughly stable variance across fitted values for both models, with a slight upward trend in the Full MLR that is reduced in the Stepwise AIC model.
+
+Influential observations: X42 shows notably high leverage in the Full MLR, approaching Cook's distance boundaries. Leverage is more evenly distributed in the Stepwise AIC model, suggesting improved stability after variable selection.
+
+```{r}
+#| label: tbl-vif
+#| tbl-cap: "Variance Inflation Factors — Full MLR"
+#| warning: false
+#| echo: true
+
+vif_full <- car::vif(lm_final) |>
+  as.data.frame() |>
+  rownames_to_column("Predictor") |>
+  rename(VIF = 2) |>
+  arrange(desc(VIF)) |>
+  mutate(VIF = round(VIF, 2))
+
+knitr::kable(vif_full)
+```
+
+
+VIF analysis showed strong multicollinearity among many predictors. `age_50_plus` (VIF = 236.6) and `poverty_2x_plus` (VIF = 196.4) had the highest values, while several age, poverty, education, and race variables exceeded the common threshold of 10. This was expected because many predictors are proportions that add up to 1 within categories such as age, race, and education, making them highly correlated with one another. In contrast, employment variables, `race_nh_black`, `race_hisp`, and `medicaid_coverage` had lower VIF values and showed little concern for multicollinearity. These results support the use of LASSO regression, which helps handle multicollinearity through regularization and variable selection.
+
+```{r}
+#| label: assumption-inline-values
+#| include: false
+
+# Flags for inline narrative
+high_vif      <- vif_full |> filter(VIF > 5) |> pull(Predictor)
+n_high_vif    <- length(high_vif)
+high_vif_text <- if (n_high_vif > 0) paste(high_vif, collapse = ", ") else "none"
+
+# Shapiro-Wilk test on residuals for both models
+sw_full <- shapiro.test(residuals(lm_final))
+sw_step <- shapiro.test(residuals(step_final))
+```
+
+
+Diagnostic plots for the Full MLR and Stepwise AIC models are shown in @fig-assumption-diagnostics. Overall, both models reasonably satisfied the main assumptions of linear regression. The residual plots showed no major nonlinear patterns, the Q-Q plots suggested approximate normality, and the Shapiro-Wilk tests indicated no strong evidence against normality (Full MLR $p$ = `r round(sw_full$p.value, 3)`, Stepwise AIC $p$ = `r round(sw_step$p.value, 3)`). The variance of residuals also appeared fairly consistent across fitted values. Observation X42 showed higher leverage in the Full MLR model, but this was reduced in the Stepwise AIC model.
+
+VIF analysis (@tbl-vif) showed strong multicollinearity among many predictors, especially `age_50_plus` (VIF = 236.6) and `poverty_2x_plus` (VIF = 196.4). This was expected because many predictors are demographic proportions that add up to 1 within categories such as age, race, and education. In contrast, employment variables, `race_nh_black`, `race_hisp`, and `medicaid_coverage` showed lower VIF values.
+
+Because of this multicollinearity, LASSO regression was used as the final model. Its regularization penalty helps reduce instability from highly correlated predictors while also performing variable selection.
+
+
+
 
 ## Results of model selection
 
